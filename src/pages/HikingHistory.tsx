@@ -58,6 +58,7 @@ const HikingHistory = () => {
         
         return {
           id: event.id,
+          eventId: event.id,
           year,
           month,
           date: event.date,
@@ -78,10 +79,25 @@ const HikingHistory = () => {
   
   // 기존 산행 이력과 완료된 이벤트 병합
   const combinedHistory = useMemo(() => {
-    // 중복 제거 (같은 id가 있으면 기존 history 우선)
+    // 산 이름 정규화: 공백 제거 + 소문자 (예: "주금산" == "주 금산" 방지)
+    const normalize = (s: string) => (s || '').trim().replace(/\s+/g, '');
+
+    // hikingHistory 항목의 ID 집합
     const historyIds = new Set(history.map(h => h.id));
-    const newEvents = completedEvents.filter(e => !historyIds.has(e.id));
-    
+    // hikingHistory 항목의 연도+월+산이름 집합 (ID가 달라도 같은 산행이면 중복 방지)
+    const historyKeys = new Set(
+      history.map(h => `${h.year}-${h.month}-${normalize(h.mountain)}`)
+    );
+
+    // completedEvents 중 hikingHistory에 없는 것만 추가
+    const newEvents = completedEvents.filter(e => {
+      if (historyIds.has(e.id)) return false; // 같은 ID
+      if (historyIds.has(e.eventId || '')) return false; // eventId로 연결된 경우
+      const key = `${e.year}-${e.month}-${normalize(e.mountain)}`;
+      if (historyKeys.has(key)) return false; // 같은 연도+월+산이름
+      return true;
+    });
+
     return [...history, ...newEvents].sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );

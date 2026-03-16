@@ -404,6 +404,7 @@ export interface Executive {
 // ==================== Hiking History Types ====================
 export interface HikingHistoryItem {
   id: string;
+  eventId?: string; // events 컬렉션 문서 ID (중복 방지용)
   year: string;
   month: string;
   date: string;

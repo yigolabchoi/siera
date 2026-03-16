@@ -399,7 +399,7 @@ const ContentManagement = () => {
               <>
                 {/* 고정 공지 */}
                 {pinnedNotices.map((notice) => (
-                  <div key={notice.id} className="flex items-center gap-3 px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 bg-red-50/40 hover:bg-red-50 transition-colors group">
+                  <div key={notice.id} onClick={() => openNoticeModal(notice)} className="flex items-center gap-3 px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 bg-red-50/40 hover:bg-red-50 transition-colors group cursor-pointer">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5">
                         <span className="flex-shrink-0 inline-flex items-center px-2.5 py-1 bg-red-600 text-white text-sm font-bold rounded">필독</span>
@@ -413,13 +413,13 @@ const ContentManagement = () => {
                       {notice.date}
                     </span>
                     <div className="flex items-center gap-1 flex-wrap sm:w-[120px] sm:justify-center flex-shrink-0">
-                      <button onClick={() => togglePin(notice.id)} className="p-2 text-amber-500 hover:bg-amber-100 rounded-lg transition-colors" title="고정 해제">
+                      <button onClick={(e) => { e.stopPropagation(); togglePin(notice.id); }} className="p-2 text-amber-500 hover:bg-amber-100 rounded-lg transition-colors" title="고정 해제">
                         <Pin className="w-5 h-5 fill-current" />
                       </button>
-                      <button onClick={() => openNoticeModal(notice)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="수정">
+                      <button onClick={(e) => { e.stopPropagation(); openNoticeModal(notice); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="수정">
                         <Edit2 className="w-5 h-5" />
                       </button>
-                      <button onClick={() => handleDeleteNotice(notice.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteNotice(notice.id); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
@@ -427,7 +427,7 @@ const ContentManagement = () => {
                 ))}
                 {/* 일반 공지 */}
                 {regularNotices.map((notice) => (
-                  <div key={notice.id} className="flex items-center gap-3 px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors group last:border-b-0">
+                  <div key={notice.id} onClick={() => openNoticeModal(notice)} className="flex items-center gap-3 px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors group last:border-b-0">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2.5">
                         <span className="flex-shrink-0 inline-flex items-center px-2.5 py-1 bg-slate-200 text-slate-600 text-sm font-bold rounded">공지</span>
@@ -440,13 +440,13 @@ const ContentManagement = () => {
                       {notice.date}
                     </span>
                     <div className="flex items-center gap-1 flex-wrap sm:w-[120px] sm:justify-center flex-shrink-0">
-                      <button onClick={() => togglePin(notice.id)} className="p-2 text-slate-300 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="고정">
+                      <button onClick={(e) => { e.stopPropagation(); togglePin(notice.id); }} className="p-2 text-slate-300 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-colors" title="고정">
                         <Pin className="w-5 h-5" />
                       </button>
-                      <button onClick={() => openNoticeModal(notice)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="수정">
+                      <button onClick={(e) => { e.stopPropagation(); openNoticeModal(notice); }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="수정">
                         <Edit2 className="w-5 h-5" />
                       </button>
-                      <button onClick={() => handleDeleteNotice(notice.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteNotice(notice.id); }} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="삭제">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>

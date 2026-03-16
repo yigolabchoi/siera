@@ -1088,10 +1088,9 @@ const Events = () => {
                   <CheckCircle className="w-6 h-6" />
                   참석 신청 완료
                 </button>
-                <button 
+                <button
                   onClick={handleCancel}
                   className="px-8 py-4 bg-slate-200 text-slate-700 rounded-xl font-bold text-lg hover:bg-slate-300 transition-colors"
-                  disabled={applicationClosed}
                 >
                   신청 취소
                 </button>
