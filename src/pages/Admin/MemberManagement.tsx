@@ -1183,11 +1183,19 @@ const MemberManagement = () => {
                       getRoleBadge(member.role)
                     )}
                   </div>
-                  <span className={`text-xs text-center font-semibold ${
-                    getHikingCount(member.id) > 0 ? 'text-blue-600' : 'text-slate-400'
-                  }`}>
-                    {getHikingCount(member.id) > 0 ? `${getHikingCount(member.id)}회` : '-'}
-                  </span>
+                  <div className="text-center">
+                    {(() => {
+                      const total = member.hikingCount ?? getHikingCount(member.id);
+                      return total > 0 ? (
+                        <div>
+                          <span className="text-xs font-semibold text-blue-600">{total}회</span>
+                          {member.hikingCount2026 !== undefined && member.hikingCount2026 > 0 && (
+                            <div className="text-[10px] text-emerald-600">'26 {member.hikingCount2026}회</div>
+                          )}
+                        </div>
+                      ) : <span className="text-xs text-slate-400">-</span>;
+                    })()}
+                  </div>
                   <span className={`text-sm truncate ${member.isActive === false ? 'text-slate-400' : 'text-slate-600'}`}>
                     {member.company || '-'}
                   </span>
@@ -1451,12 +1459,17 @@ const MemberManagement = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">산행 참여</p>
-                      <p className="text-sm font-medium">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium">
                           <TrendingUp className="w-3.5 h-3.5" />
-                          {getHikingCount(selectedMember.id)}회
+                          총 {selectedMember.hikingCount ?? getHikingCount(selectedMember.id)}회
                         </span>
-                      </p>
+                        {selectedMember.hikingCount2026 !== undefined && (
+                          <span className="inline-flex items-center px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
+                            2026년 {selectedMember.hikingCount2026}회
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div>
                       <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">역할</p>

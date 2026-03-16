@@ -38,14 +38,21 @@ async function main() {
   console.log('엑셀 회원 수:', excelMembers.length);
 
   // ── Step 2: Firestore 회원 조회 ────────────────────────────────
+  // 활성(isApproved=true, isActive≠false) 계정 우선 매핑
   const memberSnap = await db.collection('members').get();
   const memberByName = {};
   memberSnap.docs.forEach(function(d) {
     const data = d.data();
     const name = (data.name || '').trim();
-    if (name) memberByName[name] = { id: d.id, ...data };
+    if (!name) return;
+    const isActive = data.isApproved === true && data.isActive !== false;
+    const existing = memberByName[name];
+    // 아직 없거나, 기존 항목이 비활성이고 현재가 활성이면 교체
+    if (!existing || (!existing._isActive && isActive)) {
+      memberByName[name] = Object.assign({ id: d.id, _isActive: isActive }, data);
+    }
   });
-  console.log('Firestore 회원 수:', Object.keys(memberByName).length);
+  console.log('Firestore 회원 수(활성 우선):', Object.keys(memberByName).length);
 
   // ── Step 3: 매칭 ───────────────────────────────────────────────
   const matched = [];
