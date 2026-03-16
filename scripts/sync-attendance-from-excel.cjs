@@ -72,7 +72,7 @@ async function main() {
         hikingCount: typeof row[14] === 'number' ? row[14] : parseInt(row[14]) || 0,
         hikingCount2026: [row[7], row[8], row[9]].filter(function(v) {
           return v === 1 || v === '1' || (typeof v === 'string' && v.startsWith('1'));
-        }).length,
+        }).length, // 하위호환용 (마이그레이션 후 제거 가능)
       });
     } else {
       unmatched.push(name);
@@ -126,7 +126,8 @@ async function main() {
       const ref = db.collection('members').doc(m.memberId);
       batch2.update(ref, {
         hikingCount: m.hikingCount,
-        hikingCount2026: m.hikingCount2026,
+        hikingCount2026: m.hikingCount2026, // 하위호환용
+        'hikingCountByYear.2026': m.hikingCount2026, // 연도별 맵
         updatedAt: now,
       });
       updated++;

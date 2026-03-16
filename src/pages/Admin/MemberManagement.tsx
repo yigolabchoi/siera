@@ -1189,9 +1189,13 @@ const MemberManagement = () => {
                       return total > 0 ? (
                         <div>
                           <span className="text-xs font-semibold text-blue-600">{total}회</span>
-                          {member.hikingCount2026 !== undefined && member.hikingCount2026 > 0 && (
-                            <div className="text-[10px] text-emerald-600">'26 {member.hikingCount2026}회</div>
-                          )}
+                          {(() => {
+                            const currentYear = new Date().getFullYear().toString();
+                            const yearCount = member.hikingCountByYear?.[currentYear];
+                            return yearCount !== undefined && yearCount > 0 ? (
+                              <div className="text-[10px] text-emerald-600">'{currentYear.slice(2)} {yearCount}회</div>
+                            ) : null;
+                          })()}
                         </div>
                       ) : <span className="text-xs text-slate-400">-</span>;
                     })()}
@@ -1470,11 +1474,15 @@ const MemberManagement = () => {
                           <TrendingUp className="w-3.5 h-3.5" />
                           총 {selectedMember.hikingCount ?? getHikingCount(selectedMember.id)}회
                         </span>
-                        {selectedMember.hikingCount2026 !== undefined && (
-                          <span className="inline-flex items-center px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
-                            2026년 {selectedMember.hikingCount2026}회
-                          </span>
-                        )}
+                        {(() => {
+                          const currentYear = new Date().getFullYear().toString();
+                          const yearCount = selectedMember.hikingCountByYear?.[currentYear];
+                          return yearCount !== undefined ? (
+                            <span className="inline-flex items-center px-2 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
+                              {currentYear}년 {yearCount}회
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                     <div>

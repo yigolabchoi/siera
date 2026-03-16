@@ -459,11 +459,15 @@ const Members = () => {
                     <p className="text-sm text-slate-600">참여 횟수</p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-medium text-blue-600">총 {selectedMember.hikingCount}회</p>
-                      {selectedMember.hikingCount2026 !== undefined && (
-                        <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
-                          2026년 {selectedMember.hikingCount2026}회
-                        </span>
-                      )}
+                      {(() => {
+                        const currentYear = new Date().getFullYear().toString();
+                        const yearCount = selectedMember.hikingCountByYear?.[currentYear];
+                        return yearCount !== undefined ? (
+                          <span className="text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                            {currentYear}년 {yearCount}회
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 </div>
