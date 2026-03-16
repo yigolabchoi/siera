@@ -81,16 +81,16 @@ const Members = () => {
     return shuffleArray(filtered);
   }, [activeMembers, executives]);
   
-  // 검색 필터링
+  // 검색 필터링 — 운영진 포함 전체 활성 회원 대상
   const filteredMembers = useMemo(() => {
-    if (!searchTerm) return regularMembers;
+    if (!searchTerm) return activeMembers;
     const term = searchTerm.toLowerCase();
-    return regularMembers.filter(
+    return activeMembers.filter(
       m => m.name.toLowerCase().includes(term) ||
            m.company?.toLowerCase().includes(term) ||
            m.position?.toLowerCase().includes(term)
     );
-  }, [regularMembers, searchTerm]);
+  }, [activeMembers, searchTerm]);
 
   // 페이지네이션
   const totalPages = Math.ceil(filteredMembers.length / itemsPerPage);
@@ -304,19 +304,6 @@ const Members = () => {
                       </p>
                     )}
                     
-                    {member.hikingCount !== undefined && (
-                      <div className="mt-3 flex items-center gap-2 flex-wrap">
-                        <TrendingUp className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                        <span className="text-sm font-medium text-blue-600">
-                          총 {member.hikingCount}회
-                        </span>
-                        {member.hikingCount2026 !== undefined && (
-                          <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                            2026년 {member.hikingCount2026}회
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               </Card>

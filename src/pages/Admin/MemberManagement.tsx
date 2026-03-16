@@ -1217,6 +1217,12 @@ const MemberManagement = () => {
                         <span className={`font-semibold truncate ${member.isActive === false ? 'text-slate-400' : 'text-slate-900'}`}>
                           {member.name}
                         </span>
+                        {(() => {
+                          const total = member.hikingCount ?? getHikingCount(member.id);
+                          return total > 0 ? (
+                            <span className="text-[10px] font-semibold text-blue-600 flex-shrink-0">{total}회</span>
+                          ) : null;
+                        })()}
                       </div>
                       <span className={`text-xs ${member.isActive === false ? 'text-slate-400' : 'text-slate-500'}`}>
                         {member.company ? `${member.company}` : ''}{member.position ? ` · ${member.position}` : ''}
