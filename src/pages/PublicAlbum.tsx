@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, X, Image as ImageIcon, Mountain, Calendar, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Image as ImageIcon, Mountain, Calendar, Download, ExternalLink } from 'lucide-react';
 import { getDocument } from '../lib/firebase/firestore';
 import { AlbumShare } from '../types';
 
@@ -106,9 +106,21 @@ const PublicAlbum = () => {
               <h1 className="text-sm sm:text-lg font-bold text-slate-900 truncate">{album.albumTitle}</h1>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm text-slate-500 flex-shrink-0">
-            <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>{album.photos.length}장</span>
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-sm text-slate-500">
+              <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>{album.photos.length}장</span>
+            </div>
+            <a
+              href="https://sierraclub.co.kr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-[11px] sm:text-sm font-medium rounded-lg transition-colors"
+            >
+              <ExternalLink className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span className="hidden sm:inline">홈페이지</span>
+              <span className="sm:hidden">홈</span>
+            </a>
           </div>
         </div>
       </header>
