@@ -268,6 +268,30 @@ export interface Photo {
   likedBy: string[];  // 좋아요 누른 사용자 ID 목록
 }
 
+// ==================== Album Share Types ====================
+export interface AlbumSharePhoto {
+  id: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  mediumUrl?: string;
+  uploadedAt: string;
+}
+
+export interface AlbumShare {
+  id: string;
+  albumTitle: string;
+  eventId: string;
+  eventTitle: string;
+  uploadedBy: string;
+  uploadedByName: string;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  photos: AlbumSharePhoto[];
+}
+
 // ==================== Community Types ====================
 export type PostCategory = 'general' | 'info' | 'question' | 'poem';  // poem 추가
 

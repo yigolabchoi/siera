@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Upload, Download, X, Image as ImageIcon, Calendar, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Trash2, Mountain, Star, LayoutGrid, Layers, ArrowLeft, Camera, Pencil, Check } from 'lucide-react';
+import { Upload, Download, X, Image as ImageIcon, Calendar, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Trash2, Mountain, Star, LayoutGrid, Layers, ArrowLeft, Camera, Pencil, Check, Share2, Link } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContextEnhanced';
 import { useGallery } from '../contexts/GalleryContext';
 import { useEvents } from '../contexts/EventContext';
 import { useNavigate } from 'react-router-dom';
+import { setDocument } from '../lib/firebase/firestore';
 
 
 interface UploadFile {
@@ -294,6 +295,43 @@ const Gallery = () => {
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [sharingAlbumId, setSharingAlbumId] = useState<string | null>(null);
+
+  // 앨범 공유 링크 생성 및 클립보드 복사 (관리자 전용)
+  const handleShareAlbum = async (e: React.MouseEvent, album: PhotoAlbum) => {
+    e.stopPropagation();
+    if (!user || !isAdmin) return;
+    setSharingAlbumId(album.id);
+    try {
+      const shareId = crypto.randomUUID();
+      const sharePhotos = album.photos.map(p => ({
+        id: p.id,
+        imageUrl: p.imageUrl,
+        thumbnailUrl: p.thumbnailUrl || '',
+        mediumUrl: p.mediumUrl || '',
+        uploadedAt: p.uploadedAt,
+      }));
+      await setDocument('albumShares', shareId, {
+        albumTitle: album.title,
+        eventId: album.eventId,
+        eventTitle: album.eventTitle,
+        uploadedBy: album.uploadedBy,
+        uploadedByName: album.uploadedByName,
+        createdBy: user.id,
+        createdByName: user.name || user.email || '',
+        isActive: true,
+        photos: sharePhotos,
+      });
+      const shareUrl = `${window.location.origin}/share/album/${shareId}`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert(`공유 링크가 클립보드에 복사되었습니다!\n\n${shareUrl}`);
+    } catch (err) {
+      console.error('공유 링크 생성 실패:', err);
+      alert('공유 링크 생성에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setSharingAlbumId(null);
+    }
+  };
 
   // 업로드 버튼 핸들러 (명확한 함수로 분리)
   const handleOpenUploadModal = () => {
@@ -1047,6 +1085,26 @@ const Gallery = () => {
                           삭제
                         </button>
                       </div>
+                    )}
+                    {/* 공유 링크 버튼 - 관리자 전용 */}
+                    {user && isAdmin && (
+                      <button
+                        onClick={(e) => handleShareAlbum(e, album)}
+                        disabled={sharingAlbumId === album.id}
+                        className="mt-1 sm:mt-2 w-full px-1.5 sm:px-3 py-1 sm:py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-60 disabled:cursor-not-allowed rounded-md sm:rounded-lg text-[11px] sm:text-sm font-medium transition-colors flex items-center justify-center gap-0.5 sm:gap-1"
+                      >
+                        {sharingAlbumId === album.id ? (
+                          <>
+                            <div className="w-2.5 h-2.5 sm:w-4 sm:h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                            링크 생성 중...
+                          </>
+                        ) : (
+                          <>
+                            <Link className="w-2.5 h-2.5 sm:w-4 sm:h-4" />
+                            공유 링크 복사
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>

@@ -84,6 +84,7 @@ const AnnualFeeManagement = lazyWithRetry(() => import('./pages/Admin/AnnualFeeM
 const ContentManagement = lazyWithRetry(() => import('./pages/Admin/ContentManagement'));
 const WeatherTest = lazyWithRetry(() => import('./pages/Admin/WeatherTest'));
 const CleanupAccounts = lazyWithRetry(() => import('./pages/Admin/CleanupAccounts'));
+const PublicAlbum = lazyWithRetry(() => import('./pages/PublicAlbum'));
 
 
 // 로딩 컴포넌트
@@ -321,6 +322,7 @@ function App() {
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/guest-application" element={<GuestApplication />} />
             <Route path="/quick-apply" element={<QuickEventApply />} />
+            <Route path="/share/album/:shareId" element={<PublicAlbum />} />
             
             {/* Protected Member Routes */}
             <Route path="/home" element={

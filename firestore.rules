@@ -308,6 +308,15 @@ service cloud.firestore {
     }
 
     // ========================================
+    // 앨범 공유 링크 (albumShares) 컬렉션
+    // 비로그인 사용자도 읽기 가능 (공유 링크로 접근)
+    // ========================================
+    match /albumShares/{shareId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ========================================
     // 기본 거부
     // ========================================
     match /{document=**} {
