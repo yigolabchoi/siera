@@ -84,9 +84,13 @@ const HikingHistory = () => {
 
     // hikingHistory 항목의 ID 집합
     const historyIds = new Set(history.map(h => h.id));
+    // month 필드가 없는 경우 date에서 추출 (수동 등록 항목 대응)
+    const getMonth = (h: { month?: string; date?: string }) =>
+      h.month || (h.date ? h.date.split('-')[1] || '01' : '01');
+
     // hikingHistory 항목의 연도+월+산이름 집합 (ID가 달라도 같은 산행이면 중복 방지)
     const historyKeys = new Set(
-      history.map(h => `${h.year}-${h.month}-${normalize(h.mountain)}`)
+      history.map(h => `${h.year}-${getMonth(h)}-${normalize(h.mountain)}`)
     );
 
     // completedEvents 중 hikingHistory에 없는 것만 추가
