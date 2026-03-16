@@ -12,9 +12,14 @@ import { HikingEvent } from '../types';
  * @param isSpecial 특별산행 여부
  * @returns 자동 생성된 산행 제목 (예: "시애라 230차 정기산행")
  */
-export function generateEventTitle(eventNumber: number, isSpecial: boolean = false): string {
-  const type = isSpecial ? '특별산행' : '정기산행';
-  return `시애라 ${eventNumber}차 ${type}`;
+export function generateEventTitle(eventNumber: number, isSpecial: boolean = false, specialType?: string): string {
+  if (isSpecial) {
+    if (specialType === 'overseas') {
+      return `시애라 해외산행 (제${eventNumber}차)`;
+    }
+    return `시애라 ${eventNumber}차 특별산행`;
+  }
+  return `시애라 ${eventNumber}차 정기산행`;
 }
 
 /**

@@ -104,6 +104,20 @@ export interface ScheduleItem {
   type: ScheduleType;
 }
 
+// 특별산행 일차별 일정 항목
+export interface DayScheduleItem {
+  time: string;       // HH:MM (빈 문자열 허용 — "09:20", "")
+  description: string;
+}
+
+// 특별산행 일차별 일정
+export interface DaySchedule {
+  day: number;         // 1, 2, 3, ...
+  date?: string;       // YYYY-MM-DD
+  title?: string;      // "1일차, 10/8(목)"
+  items: DayScheduleItem[];
+}
+
 export interface Course {
   id: string;
   name: string;
@@ -171,6 +185,21 @@ export interface HikingEvent {
   address?: string; // 집결 장소 주소
   meetingPoint?: string; // 집결 장소 이름
   surveyPhotos?: string[]; // 답사 사진 URL 목록
+
+  // ── 특별산행 전용 필드 ─────────────────────────────────────
+  specialType?: 'overseas' | 'domestic_special'; // 해외산행 | 국내특별산행
+  endDate?: string;                 // 종료일 (YYYY-MM-DD, 다일간 산행)
+  memberCost?: number;              // 회원 경비 (원)
+  guestCost?: number;               // 게스트 경비 (원)
+  depositAmount?: number;           // 예약금 (원)
+  depositDeadline?: string;         // 예약금 마감일 (YYYY-MM-DD)
+  balanceDeadline?: string;         // 잔금 마감일 (YYYY-MM-DD)
+  memberApplicationStart?: string;  // 회원 신청 시작일
+  memberApplicationEnd?: string;    // 회원 신청 마감일
+  guestApplicationStart?: string;   // 비회원 모집 시작일
+  guestApplicationEnd?: string;     // 비회원 모집 마감일
+  specialPaymentNote?: string;      // 입금 계좌 메모 ("추후 공지" 등)
+  dailySchedule?: DaySchedule[];    // 일차별 일정 (다일간 산행)
 }
 
 // ==================== Team Types ====================
