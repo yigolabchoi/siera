@@ -23,7 +23,8 @@ export interface User {
   profileImage?: string;
   bio?: string;
   attendanceRate?: number; // 참여율 (%)
-  hikingCount?: number; // 산행 참여 횟수
+  hikingCount?: number;   // 산행 참여 횟수 (총 누계)
+  hikingCount2026?: number; // 2026년 산행 참여 횟수
   
   // 로그인 이력
   loginCount?: number;  // 총 로그인 회수
