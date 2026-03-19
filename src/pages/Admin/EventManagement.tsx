@@ -155,20 +155,30 @@ const EventManagement = () => {
       .join('\n');
     const scheduleLine = scheduleLines ? `일정:\n${scheduleLines}` : '';
 
-    // 코스 정보
-    const courseLabels = ['A', 'B', 'C', 'D'];
-    const coursesText = (event.courses || [])
+    // 코스 경로 (각 코스별 한 줄씩)
+    // course.name = 'A조' / 'B조' 등 실제 저장된 이름 사용
+    const courses = event.courses || [];
+    const courseRouteLines = courses
+      .filter(c => c.description || c.name)
       .map((course, idx) => {
-        const label = courseLabels[idx] || String(idx + 1);
-        const parts = [`산행코스(${label}조): ${course.description || course.name}`];
-        const meta = [
-          course.distance ? `약 ${course.distance}` : '',
-          course.duration ? `약 ${course.duration}` : '',
-        ].filter(Boolean).join(', ');
-        if (meta) parts.push(`산행시간: ${label}조-${meta}`);
-        return parts.join('\n');
+        const prefix = idx === 0 ? `산행코스(${course.name}):` : `${course.name}:`;
+        const distanceSuffix = course.distance ? ` (${course.distance})` : '';
+        return `${prefix} ${course.description || ''}${distanceSuffix}`;
       })
       .join('\n');
+
+    // 산행시간 요약 (모든 코스를 한 줄에)
+    const timeSummaryParts = courses
+      .filter(c => c.duration || c.distance)
+      .map(course => {
+        const parts = [course.duration, course.distance].filter(Boolean).join(', ');
+        return `${course.name}-${parts}`;
+      });
+    const timeSummaryLine = timeSummaryParts.length > 0
+      ? `산행시간: ${timeSummaryParts.join(' / ')}`
+      : '';
+
+    const coursesText = [courseRouteLines, timeSummaryLine].filter(Boolean).join('\n');
 
     // 참가비
     const costLine = event.cost ? `참가비: ${event.cost}` : '';
