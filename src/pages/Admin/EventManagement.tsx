@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash2, Calendar, MapPin, Users, Save, X, CreditCard, Phone, UserPlus, CheckCircle, AlertCircle, Lock, Unlock, Mountain, Printer, Clock, FileText, Undo, GripVertical, Search, ChevronDown, Camera, Upload, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, MapPin, Users, Save, X, CreditCard, Phone, UserPlus, CheckCircle, AlertCircle, Lock, Unlock, Mountain, Printer, Clock, FileText, Undo, GripVertical, Search, ChevronDown, Camera, Upload, Loader2, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEvents } from '../../contexts/EventContext';
 import { useMembers } from '../../contexts/MemberContext';
@@ -100,6 +100,98 @@ const EventManagement = () => {
 
   // 다음 회차 자동 계산
   const nextEventNumber = useMemo(() => getNextEventNumber(events), [events]);
+
+  // 산행내용 텍스트 복사
+  const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
+
+  const copyEventText = (event: HikingEvent) => {
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const date = event.date ? new Date(event.date) : null;
+
+    // "2026년 4월 산행" 형태
+    const yearMonthLine = date
+      ? `${date.getFullYear()}년 ${date.getMonth() + 1}월 산행`
+      : '';
+
+    // "시애라 231차" 형태
+    const eventNumberLine = event.eventNumber
+      ? `시애라 ${event.eventNumber}차`
+      : event.title || '';
+
+    // "경기도 가평군 ... 유명산 (863m)" 형태
+    const mountainLine = [
+      event.location,
+      event.mountain && event.altitude
+        ? `${event.mountain} (${event.altitude})`
+        : event.mountain || event.altitude || '',
+    ].filter(Boolean).join(' ');
+
+    // 출발 일정 (departure 타입)
+    const departure = event.schedule?.find(s => s.type === 'departure');
+    const departureLine = date && departure?.time
+      ? `출발: ${String(date.getFullYear()).slice(2)}. ${date.getMonth() + 1}. ${date.getDate()}(${dayNames[date.getDay()]}) ${departure.time}`
+      : '';
+
+    // 집결 장소 (departure location)
+    const gatherLine = departure?.location
+      ? `장소: ${departure.location}`
+      : '';
+
+    // 일정 전체
+    const scheduleTypeLabel: Record<string, string> = {
+      departure: '출발',
+      stop: '경유',
+      lunch: '점심',
+      networking: '네트워킹',
+      lunch_networking: '점심/네트워킹',
+      hiking_start: '산행 시작',
+      hiking_end: '산행 종료',
+      return: '복귀',
+      arrival: '도착',
+    };
+    const scheduleLines = (event.schedule || [])
+      .filter(s => s.time || s.location)
+      .map(s => `  ${s.time || '      '} ${s.location || scheduleTypeLabel[s.type] || s.type}`)
+      .join('\n');
+    const scheduleLine = scheduleLines ? `일정:\n${scheduleLines}` : '';
+
+    // 코스 정보
+    const courseLabels = ['A', 'B', 'C', 'D'];
+    const coursesText = (event.courses || [])
+      .map((course, idx) => {
+        const label = courseLabels[idx] || String(idx + 1);
+        const parts = [`산행코스(${label}조): ${course.description || course.name}`];
+        const meta = [
+          course.distance ? `약 ${course.distance}` : '',
+          course.duration ? `약 ${course.duration}` : '',
+        ].filter(Boolean).join(', ');
+        if (meta) parts.push(`산행시간: ${label}조-${meta}`);
+        return parts.join('\n');
+      })
+      .join('\n');
+
+    // 참가비
+    const costLine = event.cost ? `참가비: ${event.cost}` : '';
+
+    const lines = [
+      yearMonthLine,
+      eventNumberLine,
+      mountainLine,
+      '',
+      departureLine,
+      gatherLine,
+      scheduleLine,
+      coursesText ? `\n${coursesText}` : '',
+      costLine ? `\n${costLine}` : '',
+    ].filter(line => line !== undefined && line !== null);
+
+    const text = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedEventId(event.id);
+      setTimeout(() => setCopiedEventId(null), 2000);
+    });
+  };
   
   const [formData, setFormData] = useState<HikingEvent>({
     id: '',
@@ -2394,6 +2486,26 @@ const EventManagement = () => {
 
                           {/* 액션 버튼 */}
                           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-3 pt-3 border-t border-slate-100">
+                            <button
+                              onClick={() => copyEventText(event)}
+                              className={`px-2.5 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5 ${
+                                copiedEventId === event.id
+                                  ? 'text-emerald-700 bg-emerald-50'
+                                  : 'text-violet-600 bg-violet-50 hover:bg-violet-100'
+                              }`}
+                            >
+                              {copiedEventId === event.id ? (
+                                <>
+                                  <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  복사완료
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                                  내용 복사
+                                </>
+                              )}
+                            </button>
                             <button
                               onClick={() => window.open(`/admin/events/print/${event.id}`, '_blank')}
                               className="px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5"
