@@ -318,7 +318,7 @@ const Home = () => {
                   <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-slate-600">
                     <div className="flex items-center gap-1.5">
                       <Mountain className="w-4 h-4" />
-                      <span>{specialEvent.altitude}</span>
+                      <span>{specialEvent.mountain} {specialEvent.altitude}</span>
                     </div>
                     <span className="text-slate-300">|</span>
                     <div className="flex items-center gap-1.5">
@@ -331,12 +331,12 @@ const Home = () => {
                       <span>{new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</span>
                     </div>
                   </div>
-                  
+
                   {/* 설명 */}
                   <p className="text-slate-600 mb-6 text-sm leading-relaxed">
                     {specialEvent.description || '특별한 산행에 여러분을 초대합니다. 일반 정기 산행과는 다른 특별한 경험을 만나보세요.'}
                   </p>
-                  
+
                   {/* 버튼 */}
                   <div className="flex flex-col sm:flex-row gap-3">
                     {specialApplicationStatus === 'open' ? (
@@ -515,7 +515,7 @@ const Home = () => {
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-sm sm:text-base md:text-lg lg:text-2xl text-white/90 mb-2 font-bold">
               <div className="flex items-center gap-1 sm:gap-1.5">
                 <Mountain className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
-                <span>{mainEvent.altitude}</span>
+                <span>{mainEvent.mountain} {mainEvent.altitude}</span>
               </div>
               <span className="text-white/50">·</span>
               <div className="flex items-center gap-1 sm:gap-1.5">
@@ -617,7 +617,7 @@ const Home = () => {
               <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-slate-600">
                 <div className="flex items-center gap-1.5">
                   <Mountain className="w-4 h-4" />
-                  <span>{specialEvent.altitude}</span>
+                  <span>{specialEvent.mountain} {specialEvent.altitude}</span>
                 </div>
                 <span className="text-slate-300">|</span>
                 <div className="flex items-center gap-1.5">
