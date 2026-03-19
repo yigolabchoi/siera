@@ -8,8 +8,6 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   reauthenticateWithPopup,
   reauthenticateWithCredential,
   EmailAuthProvider,
@@ -121,25 +119,14 @@ export const getUserTokenResult = async (forceRefresh = false) => {
 
 // ==================== Google 인증 ====================
 
-const isMobileDevice = (): boolean => {
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-};
-
 const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 /**
- * 구글 로그인
- * - PC: signInWithPopup (즉시 결과 반환)
- * - 모바일: signInWithRedirect (페이지 이동 후 getRedirectResult로 처리)
+ * 구글 로그인 (팝업 방식 - PC/모바일 공통)
+ * signInWithRedirect는 iOS Safari ITP 정책으로 모바일에서 불안정하여 팝업으로 통일
  */
 export const signInWithGoogle = async (): Promise<AuthResultWithUser> => {
-  if (isMobileDevice()) {
-    await signInWithRedirect(auth, googleProvider);
-    // redirect 후에는 페이지가 새로고침되므로 여기 도달하지 않음
-    return { success: true };
-  }
-
   const userCredential = await signInWithPopup(auth, googleProvider);
   return {
     success: true,
@@ -149,25 +136,11 @@ export const signInWithGoogle = async (): Promise<AuthResultWithUser> => {
 };
 
 /**
- * Google Redirect 결과 처리 (모바일 전용)
- * 앱 초기화 시 한 번 호출하여 redirect 결과가 있으면 처리
+ * Google Redirect 결과 처리 (레거시 - 팝업 방식으로 전환 후 미사용)
+ * 기존 redirect 방식에서 팝업 방식으로 전환되어 항상 null 반환
  */
 export const handleGoogleRedirectResult = async (): Promise<AuthResultWithUser | null> => {
-  try {
-    const result = await getRedirectResult(auth);
-    if (!result) return null;
-    return {
-      success: true,
-      user: result.user,
-      isNewUser: result.user.metadata.creationTime === result.user.metadata.lastSignInTime,
-    };
-  } catch (err: any) {
-    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-      return null;
-    }
-    console.error('Google redirect result error:', err);
-    return { success: false, error: err.message };
-  }
+  return null;
 };
 
 // ==================== SMS(전화번호) 인증 ====================
@@ -207,17 +180,9 @@ const clearRecaptcha = () => {
 export const setupRecaptcha = (buttonId: string): RecaptchaVerifier => {
   clearRecaptcha();
 
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:setupRecaptcha',message:'setupRecaptcha called',data:{buttonId,authSettingsDisabled:auth?.settings?.appVerificationDisabledForTesting},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
-
   recaptchaVerifier = new RecaptchaVerifier(auth, buttonId, {
     size: 'invisible',
-    callback: () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:recaptchaCallback',message:'reCAPTCHA callback fired',data:{},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
-    },
+    callback: () => {},
     'expired-callback': () => { clearRecaptcha(); },
   });
 
@@ -226,28 +191,14 @@ export const setupRecaptcha = (buttonId: string): RecaptchaVerifier => {
 
 /** 전화번호로 인증 코드 전송 */
 export const sendPhoneVerificationCode = async (phoneNumber: string): Promise<AuthResult> => {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:sendPhoneVerificationCode',message:'sendPhoneVerificationCode called',data:{phoneNumber,hasRecaptchaVerifier:!!recaptchaVerifier,authDisabledForTesting:auth?.settings?.appVerificationDisabledForTesting},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
-
   try {
     if (!recaptchaVerifier) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:sendPhoneVerificationCode:noRecaptcha',message:'No recaptchaVerifier!',data:{},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return { success: false, error: 'reCAPTCHA가 초기화되지 않았습니다.' };
     }
 
     confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:sendPhoneVerificationCode:success',message:'signInWithPhoneNumber succeeded',data:{hasConfirmation:!!confirmationResult},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     return { success: true };
   } catch (error: unknown) {
-    // #region agent log
-    const errData = isAuthError(error) ? {code:(error as any).code,message:(error as any).message,customData:(error as any).customData,serverResponse:(error as any).serverResponse} : {raw:String(error)};
-    fetch('http://127.0.0.1:7244/ingest/de9821da-b9b4-4b1c-a4cd-7f931bc5accb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:sendPhoneVerificationCode:error',message:'signInWithPhoneNumber FAILED',data:errData,timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     clearRecaptcha();
 
     if (isAuthError(error)) {
