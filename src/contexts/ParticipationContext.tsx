@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { getDocuments, setDocument, updateDocument as firestoreUpdate, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
 import { logError, ErrorLevel, ErrorCategory } from '../utils/errorHandler';
 import { Participation, Team, Payment } from '../types';
@@ -165,20 +165,41 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
     }
   }, []);
 
+  // 동시 호출 방지 락
+  const addingRef = useRef(false);
+
   const addParticipation = useCallback(async (data: Omit<Participation, 'id' | 'createdAt' | 'updatedAt'>) => {
-    // 중복 검사 (취소된 참가는 제외 — 재신청 허용)
-    const existing = participations.find(
-      p => p.eventId === data.eventId && p.userId === data.userId && p.status !== 'cancelled'
-    );
-    if (existing) throw new Error('이미 이 산행에 신청하셨습니다.');
+    // 동시 호출 방지 (더블클릭 등)
+    if (addingRef.current) throw new Error('신청 처리 중입니다. 잠시만 기다려주세요.');
+    addingRef.current = true;
 
-    const id = generateId('participation');
-    const now = nowISO();
-    const participation: Participation = { ...data, id, createdAt: now, updatedAt: now };
+    try {
+      // 1차 검사: 메모리(state) 기준
+      const existing = participations.find(
+        p => p.eventId === data.eventId && p.userId === data.userId && p.status !== 'cancelled'
+      );
+      if (existing) throw new Error('이미 이 산행에 신청하셨습니다.');
 
-    const result = await setDocument('participations', id, participation);
-    if (!result.success) throw new Error(result.error || '참가 신청 추가 실패');
-    setParticipations(prev => [...prev, participation]);
+      // 2차 검사: Firestore 직접 쿼리 (race condition 방지)
+      const firestoreCheck = await queryDocuments<Participation>('participations', [
+        { field: 'eventId', operator: '==', value: data.eventId },
+        { field: 'userId', operator: '==', value: data.userId },
+      ]);
+      if (firestoreCheck.success && firestoreCheck.data) {
+        const activeInFirestore = firestoreCheck.data.find(p => p.status !== 'cancelled');
+        if (activeInFirestore) throw new Error('이미 이 산행에 신청하셨습니다.');
+      }
+
+      const id = generateId('participation');
+      const now = nowISO();
+      const participation: Participation = { ...data, id, createdAt: now, updatedAt: now };
+
+      const result = await setDocument('participations', id, participation);
+      if (!result.success) throw new Error(result.error || '참가 신청 추가 실패');
+      setParticipations(prev => [...prev, participation]);
+    } finally {
+      addingRef.current = false;
+    }
   }, [participations]);
 
   const updateParticipation = useCallback(async (id: string, updates: Partial<Participation>) => {
@@ -264,7 +285,24 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
   );
 
   const getParticipationsByEvent = useCallback(
-    (eventId: string) => participations.filter(p => p.eventId === eventId),
+    (eventId: string) => {
+      const eventParticipations = participations.filter(p => p.eventId === eventId);
+      // 동일 userId 중복 제거: 활성(non-cancelled) 우선, 같으면 최신 createdAt 우선
+      const userMap = new Map<string, Participation>();
+      for (const p of eventParticipations) {
+        const key = p.userId;
+        if (!key) { userMap.set(p.id, p); continue; } // userId 없으면 그대로 유지
+        const existing = userMap.get(key);
+        if (!existing) { userMap.set(key, p); continue; }
+        const pActive = p.status !== 'cancelled';
+        const eActive = existing.status !== 'cancelled';
+        if (pActive && !eActive) { userMap.set(key, p); continue; }
+        if (!pActive && eActive) continue;
+        // 둘 다 활성 또는 둘 다 취소 → 최신 우선
+        if ((p.createdAt || '') > (existing.createdAt || '')) userMap.set(key, p);
+      }
+      return Array.from(userMap.values());
+    },
     [participations],
   );
 
