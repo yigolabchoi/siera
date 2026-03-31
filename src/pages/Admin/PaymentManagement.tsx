@@ -285,13 +285,37 @@ const PaymentManagement = () => {
     });
     
     const uniquePayments = Array.from(userPaymentMap.values());
-    
+
+    // 2차 중복 제거: 같은 이름이 다른 userId로 두 번 등장하는 경우 (병합된 계정 등)
+    // 활성 계정(isApproved=true, isActive≠false, mergedInto 없음) 우선 유지
+    const userNamePaymentMap = new Map<string, any>();
+    uniquePayments.forEach(payment => {
+      const name = payment.userName;
+      if (!name) { userNamePaymentMap.set(payment.id, payment); return; }
+      const existing = userNamePaymentMap.get(name);
+      if (!existing) { userNamePaymentMap.set(name, payment); return; }
+
+      // 각각의 member 활성 상태 비교
+      const memberA = getMemberById(payment.userId);
+      const memberB = getMemberById(existing.userId);
+      const aActive = memberA && memberA.isApproved && memberA.isActive !== false && !(memberA as any).mergedInto;
+      const bActive = memberB && memberB.isApproved && memberB.isActive !== false && !(memberB as any).mergedInto;
+
+      if (aActive && !bActive) { userNamePaymentMap.set(name, payment); return; }
+      if (!aActive && bActive) return;
+      // 둘 다 활성 또는 둘 다 비활성 → 최신 payment 유지
+      const aDate = new Date(payment.createdAt || payment.applicationDate || 0);
+      const bDate = new Date(existing.createdAt || existing.applicationDate || 0);
+      if (aDate > bDate) userNamePaymentMap.set(name, payment);
+    });
+    const deduplicatedPayments = Array.from(userNamePaymentMap.values());
+
     // participation에서 isGuest, 회사, 연락처 등 보강 (기존 payment에 없는 경우)
     const participationMap = new Map(
       eventParticipations.map(p => [p.userId, p])
     );
     
-    return uniquePayments.map(payment => {
+    return deduplicatedPayments.map(payment => {
       const participation = participationMap.get(payment.userId);
       if (!participation) return payment;
       
