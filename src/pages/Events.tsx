@@ -66,11 +66,17 @@ const Events = () => {
     return members.filter(m => m.isActive !== false).length;
   }, [members]);
 
-  // 참석자 목록: ParticipationContext 기반 (취소 제외)
+  // 참석자 목록: ParticipationContext 기반 (취소 제외, 병합된 구 계정 제외)
   const eventParticipations = useMemo(() => {
     if (!selectedEvent) return [];
-    return getParticipationsByEvent(selectedEvent.id).filter(p => p.status !== 'cancelled');
-  }, [selectedEvent, participations, getParticipationsByEvent]);
+    return getParticipationsByEvent(selectedEvent.id).filter(p => {
+      if (p.status === 'cancelled') return false;
+      // 병합된(mergedInto 있음) 비활성 계정의 participation 제외
+      const member = getMemberById(p.userId);
+      if (member && (member as any).mergedInto) return false;
+      return true;
+    });
+  }, [selectedEvent, participations, getParticipationsByEvent, getMemberById, members]);
   
   // EventContext의 레거시 참석자 (participations에 없는 경우만)
   const legacyParticipants = useMemo(() => {
