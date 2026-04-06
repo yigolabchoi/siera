@@ -133,7 +133,17 @@ const Events = () => {
       return { ...p, profileImage: undefined as string | undefined };
     });
     
-    return [...fromParticipations, ...fromLegacy];
+    // 최종 dedup: memberId(=userId) 기준 — fromParticipations 우선
+    const seen = new Set<string>();
+    const deduped: typeof fromParticipations = [];
+    const all = [...fromParticipations, ...fromLegacy] as typeof fromParticipations;
+    for (const p of all) {
+      const key = p.memberId || p.id;
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      deduped.push(p);
+    }
+    return deduped;
   }, [eventParticipations, legacyParticipants, members, getMemberById]);
   
   // 페이지 진입 시 최신 참가 데이터 로드 (다른 세션에서 추가된 신청 반영)

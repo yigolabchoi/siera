@@ -169,7 +169,13 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
               }
               legacyParticipantsByEvent[eventId].forEach(participant => {
                 // 이미 존재하지 않는 경우만 추가
-                if (!merged[eventId].some(p => p.id === participant.id)) {
+                // 모던(id=userId)과 레거시(id=doc_id) ID 체계가 달라 memberId도 함께 비교
+                const isDuplicate = merged[eventId].some(p =>
+                  p.id === participant.id ||
+                  p.id === participant.memberId ||
+                  (participant.memberId && p.memberId === participant.memberId)
+                );
+                if (!isDuplicate) {
                   merged[eventId].push(participant);
                 }
               });
@@ -495,7 +501,11 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
           setParticipants(prev => ({
             ...prev,
             [eventId]: [...(prev[eventId] || []), ...legacyEventParticipants.filter(
-              lp => !prev[eventId]?.some(p => p.id === lp.id)
+              lp => !prev[eventId]?.some(p =>
+                p.id === lp.id ||
+                p.id === lp.memberId ||
+                (lp.memberId && p.memberId === lp.memberId)
+              )
             )],
           }));
         }
