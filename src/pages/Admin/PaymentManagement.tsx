@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Search, CreditCard, CheckCircle, Clock, Users, AlertCircle, Calendar, Filter, Loader2, XCircle, RotateCcw } from 'lucide-react';
+import { Search, CreditCard, CheckCircle, Clock, Users, AlertCircle, Calendar, Filter, Loader2, XCircle, RotateCcw, Ban } from 'lucide-react';
 import { formatPhoneNumber } from '../../utils/format';
 import { Link } from 'react-router-dom';
 import { useEvents } from '../../contexts/EventContext';
@@ -117,8 +117,10 @@ const PaymentManagement = () => {
   // 모달 상태
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<any>(null);
   const [refundReason, setRefundReason] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   
   // 모집 중인 이벤트만 필터링 (완료되지 않은 산행)
   const events = useMemo(() => {
@@ -474,6 +476,70 @@ const PaymentManagement = () => {
     }
   };
 
+  // 강제 취소
+  const handleForceCancel = (payment: any) => {
+    setSelectedPayment(payment);
+    setCancelReason('');
+    setIsCancelModalOpen(true);
+  };
+
+  const confirmForceCancel = async () => {
+    if (!selectedPayment || !cancelReason.trim()) {
+      alert('취소 사유를 입력해주세요.');
+      return;
+    }
+    const memberInfo = getMemberInfo(selectedPayment);
+    try {
+      // 1. payment 취소
+      await updatePayment(selectedPayment.id, {
+        paymentStatus: 'cancelled',
+        cancelledAt: new Date().toISOString(),
+        cancelReason: cancelReason,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // 2. participation 취소 (⚠️ cascade 삭제 방지 — Firestore 직접 업데이트)
+      if (selectedPayment.participationId) {
+        try {
+          await updateDocument('participations', selectedPayment.participationId, {
+            status: 'cancelled',
+            cancelledAt: new Date().toISOString(),
+            cancellationReason: cancelReason,
+            updatedAt: new Date().toISOString(),
+          });
+          participationCtx.updateParticipationStatus(selectedPayment.participationId, 'cancelled').catch(() => {});
+        } catch {
+          console.error('participation 상태 변경 실패 (취소 처리는 완료됨)');
+        }
+
+        // 3. 조편성에서 해당 참가자 제거
+        try {
+          const eventTeams = getTeamsByEventId(selectedPayment.eventId);
+          if (eventTeams.length > 0) {
+            const participationId = selectedPayment.participationId;
+            const updatedTeams = eventTeams.map((team: any) => ({
+              ...team,
+              leaderId: team.leaderId === participationId ? '' : team.leaderId,
+              leaderName: team.leaderId === participationId ? '' : team.leaderName,
+              leaderOccupation: team.leaderId === participationId ? '' : team.leaderOccupation,
+              members: (team.members || []).filter((m: any) => m.id !== participationId),
+            }));
+            await setTeamsForEvent(selectedPayment.eventId, updatedTeams);
+          }
+        } catch {
+          console.error('조편성 제거 실패 (취소 처리는 완료됨)');
+        }
+      }
+
+      setIsCancelModalOpen(false);
+      setSelectedPayment(null);
+      setCancelReason('');
+      alert(`${memberInfo.name}님의 산행 신청이 취소되었습니다.`);
+    } catch (error) {
+      alert('취소 처리 중 오류가 발생했습니다.');
+    }
+  };
+
   const getStatusBadge = (status: string, refundStatus?: string) => {
     if (refundStatus === 'completed' || status === 'refunded') {
       return <Badge variant="danger"><RotateCcw className="w-3 h-3 mr-1" />환불</Badge>;
@@ -751,6 +817,15 @@ const PaymentManagement = () => {
                             입금확인
                           </button>
                         )}
+                        {payment.paymentStatus !== 'cancelled' && payment.refundStatus !== 'completed' && payment.paymentStatus !== 'refunded' && (
+                          <button
+                            onClick={() => handleForceCancel(payment)}
+                            className="px-3 py-2 bg-slate-600 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-1"
+                          >
+                            <Ban className="w-3 h-3" />
+                            취소
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -855,6 +930,15 @@ const PaymentManagement = () => {
                                 입금확인
                               </button>
                             )}
+                            {payment.paymentStatus !== 'cancelled' && payment.refundStatus !== 'completed' && payment.paymentStatus !== 'refunded' && (
+                              <button
+                                onClick={() => handleForceCancel(payment)}
+                                className="px-3 py-1 bg-slate-600 text-white text-sm rounded hover:bg-slate-700 transition-colors flex items-center gap-1"
+                              >
+                                <Ban className="w-3 h-3" />
+                                취소
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -925,6 +1009,91 @@ const PaymentManagement = () => {
             </div>
           </div>
         </Modal>
+        );
+      })()}
+
+      {/* 강제 취소 모달 */}
+      {isCancelModalOpen && selectedPayment && (() => {
+        const cancelMemberInfo = getMemberInfo(selectedPayment);
+        const isPaid = selectedPayment.paymentStatus === 'completed' || selectedPayment.paymentStatus === 'confirmed';
+        return (
+          <Modal onClose={() => setIsCancelModalOpen(false)} title="산행 신청 취소">
+            <div className="p-6">
+              <div className="mb-6">
+                <div className="bg-slate-50 p-4 rounded-lg space-y-2 border border-slate-200">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">이름:</span>
+                    <span className="font-semibold text-slate-900">{cancelMemberInfo.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">회사/직책:</span>
+                    <span className="font-semibold text-slate-900">
+                      {cancelMemberInfo.company && cancelMemberInfo.position
+                        ? `${cancelMemberInfo.company} / ${cancelMemberInfo.position}`
+                        : cancelMemberInfo.company || cancelMemberInfo.position || '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">결제 상태:</span>
+                    <span className="font-semibold">{getStatusBadge(selectedPayment.paymentStatus, selectedPayment.refundStatus)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">금액:</span>
+                    <span className="font-bold text-slate-900">{selectedPayment.amount.toLocaleString()}원</span>
+                  </div>
+                </div>
+              </div>
+
+              {isPaid && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">이미 입금이 확인된 신청자입니다.</span><br />
+                      취소 후 환불은 별도로 직접 처리해주세요.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  취소 사유 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="취소 사유를 입력해주세요 (예: 개인 사정, 연락 두절 등)"
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+                  rows={3}
+                  autoFocus
+                />
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6">
+                <p className="text-xs text-red-700">
+                  취소 처리 시 참가 신청이 취소되고, 조편성에서도 자동으로 제거됩니다.
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsCancelModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  닫기
+                </button>
+                <button
+                  onClick={confirmForceCancel}
+                  disabled={!cancelReason.trim()}
+                  className="flex-1 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Ban className="w-4 h-4" />
+                  신청 취소
+                </button>
+              </div>
+            </div>
+          </Modal>
         );
       })()}
 
