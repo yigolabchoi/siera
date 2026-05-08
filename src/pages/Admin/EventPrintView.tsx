@@ -30,7 +30,7 @@ const EventPrintView = () => {
   let event = getEventById(eventId || '');
   let teams = getTeamsByEventId(eventId || '');
   
-  // 환불된 사용자 필터링 + 번호 오름차순 정렬 + 게스트 정보 보강
+  // 환불된 사용자 필터링 + 번호 오름차순 정렬 + 게스트/회사/직책 정보 보강
   const filteredTeams = useMemo(() => {
     const sortFn = (a: any, b: any) => {
       const numA = (a as any).number ?? parseInt(a.name) ?? 0;
@@ -38,24 +38,53 @@ const EventPrintView = () => {
       return numA - numB;
     };
 
-    // 참가 데이터로 게스트 여부 맵 구성 (participationId → isGuest)
     const eventParticipations = eventId ? getParticipationsByEvent(eventId) : [];
+
+    // participationId → participation 맵 (회사/직책 fallback용)
+    const participationDataMap = new Map(
+      eventParticipations.map(p => [p.id, p])
+    );
+    // participationId → isGuest 맵
     const participationGuestMap = new Map<string, boolean>(
       eventParticipations.map(p => [p.id, p.isGuest === true])
     );
-    // leaderId(userId) 기준으로도 맵 구성 (조장 매칭용)
+    // userId → isGuest 맵 (조장 매칭용)
     const userIdGuestMap = new Map<string, boolean>(
       eventParticipations.map(p => [p.userId, p.isGuest === true])
     );
+    // userId → participation 맵 (조장 회사/직책 fallback용)
+    const userIdParticipationMap = new Map(
+      eventParticipations.map(p => [p.userId, p])
+    );
+
+    // 회사/직책 보강: members 컬렉션 우선, 없으면 participation userCompany/userPosition
+    const enrichMember = (member: TeamMember, participationId: string) => {
+      const p = participationDataMap.get(participationId);
+      const company = member.company || (p as any)?.userCompany || '';
+      const position = member.position || member.occupation || (p as any)?.userPosition || '';
+      return {
+        ...member,
+        company,
+        position,
+        isGuest: member.isGuest || participationGuestMap.get(participationId) || false,
+      };
+    };
+
+    const enrichLeader = (team: Team) => {
+      const leaderUserId = team.leaderId || '';
+      const p = userIdParticipationMap.get(leaderUserId);
+      return {
+        leaderCompany: (team as any).leaderCompany || (p as any)?.userCompany || '',
+        leaderPosition: (team as any).leaderPosition || (p as any)?.userPosition || '',
+        leaderIsGuest: (team as any).leaderIsGuest || userIdGuestMap.get(leaderUserId) || false,
+      };
+    };
 
     if (!eventId) {
       return [...teams].sort(sortFn).map(team => ({
         ...team,
-        leaderIsGuest: (team as any).leaderIsGuest || userIdGuestMap.get(team.leaderId || '') || false,
-        members: (team.members || []).map(member => ({
-          ...member,
-          isGuest: member.isGuest || participationGuestMap.get(member.id) || false,
-        })),
+        ...enrichLeader(team),
+        members: (team.members || []).map(m => enrichMember(m, m.id)),
       }));
     }
 
@@ -66,17 +95,13 @@ const EventPrintView = () => {
         .map(payment => payment.userId)
     );
 
-    // 각 팀에서 환불된 멤버 제거 후 번호 오름차순 정렬 + isGuest 보강
     return teams.map(team => ({
       ...team,
-      leaderIsGuest: (team as any).leaderIsGuest || userIdGuestMap.get(team.leaderId || '') || false,
+      ...enrichLeader(team),
       members: (team.members?.filter(member => {
         const payment = eventPayments.find(p => p.participationId === member.id);
         return payment ? !refundedUserIds.has(payment.userId) : true;
-      }) || []).map(member => ({
-        ...member,
-        isGuest: member.isGuest || participationGuestMap.get(member.id) || false,
-      })),
+      }) || []).map(m => enrichMember(m, m.id)),
     })).sort(sortFn);
   }, [teams, eventId, payments, getParticipationsByEvent]);
   

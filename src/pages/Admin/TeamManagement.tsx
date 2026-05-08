@@ -91,7 +91,25 @@ const TeamManagement = () => {
         const participationUserMap = new Map(
           eventParticipations.map(p => [p.id, p.userId])
         );
-        
+        // participationId → participation 매핑 (게스트 userCompany/userPosition fallback용)
+        const participationDataMap = new Map(
+          eventParticipations.map(p => [p.id, p])
+        );
+
+        // 회사/직책 보강 헬퍼: members DB 우선, 없으면 participation fallback
+        const enrichCompanyPosition = (participationId: string, fallbackCompany = '', fallbackPosition = '') => {
+          const userId = participationUserMap.get(participationId);
+          const memberData = userId ? members.find(m => m.id === userId) : null;
+          if (memberData) {
+            return { company: memberData.company || '', position: memberData.position || '' };
+          }
+          const p = participationDataMap.get(participationId);
+          return {
+            company: (p as any)?.userCompany || fallbackCompany,
+            position: (p as any)?.userPosition || fallbackPosition,
+          };
+        };
+
         // 환불된 사용자를 조원 목록에서 제거 + members DB에서 최신 정보 보강
         const filteredTeams = existingTeams.map(team => {
           // 조장 확인: 참가 신청이 유효하고 환불되지 않았는지
@@ -99,55 +117,48 @@ const TeamManagement = () => {
           const isLeaderRefunded = leaderPayment ? refundedUserIds.has(leaderPayment.userId) : false;
           const isLeaderParticipationValid = validParticipationIds.has(team.leaderId);
           const shouldRemoveLeader = isLeaderRefunded || !isLeaderParticipationValid;
-          
-          // 조장 정보를 members DB에서 보강
+
+          // 조장 정보 보강 (members → participation 순서로 fallback)
           let leaderName = team.leaderName;
           let leaderCompany = team.leaderCompany || '';
           let leaderPosition = team.leaderPosition || '';
           let leaderOccupation = team.leaderOccupation || '';
-          
+
           if (!shouldRemoveLeader && team.leaderId) {
+            const enriched = enrichCompanyPosition(team.leaderId, leaderCompany, leaderPosition);
             const leaderUserId = participationUserMap.get(team.leaderId);
             const leaderMember = leaderUserId ? members.find(m => m.id === leaderUserId) : null;
-            if (leaderMember) {
-              leaderName = leaderMember.name || leaderName;
-              leaderCompany = leaderMember.company || '';
-              leaderPosition = leaderMember.position || '';
-              leaderOccupation = [leaderMember.company, leaderMember.position].filter(Boolean).join(' ');
-            }
+            if (leaderMember) leaderName = leaderMember.name || leaderName;
+            leaderCompany = enriched.company;
+            leaderPosition = enriched.position;
+            leaderOccupation = [enriched.company, enriched.position].filter(Boolean).join(' ');
           }
-          
+
           return {
             ...team,
-            // 조장이 환불되었거나 신청 취소되었으면 제거
             leaderId: shouldRemoveLeader ? '' : team.leaderId,
             leaderName: shouldRemoveLeader ? '' : leaderName,
             leaderOccupation: shouldRemoveLeader ? '' : leaderOccupation,
             leaderCompany: shouldRemoveLeader ? '' : leaderCompany,
             leaderPosition: shouldRemoveLeader ? '' : leaderPosition,
-            // 환불되었거나 신청 취소된 조원 제거 + members DB에서 최신 정보 보강
+            // 환불되었거나 신청 취소된 조원 제거 + 정보 보강
             members: team.members?.filter(member => {
               const payment = eventPayments.find(p => p.participationId === member.id);
               const isRefunded = payment ? refundedUserIds.has(payment.userId) : false;
               const isParticipationValid = validParticipationIds.has(member.id);
-              const shouldRemove = isRefunded || !isParticipationValid;
-              
-              return !shouldRemove;
+              return !isRefunded && isParticipationValid;
             }).map(member => {
-              // members DB에서 최신 정보 보강
               const memberUserId = participationUserMap.get(member.id);
               const memberData = memberUserId ? members.find(m => m.id === memberUserId) : null;
-              if (memberData) {
-                return {
-                  ...member,
-                  name: memberData.name || member.name,
-                  company: memberData.company || '',
-                  position: memberData.position || '',
-                  occupation: [memberData.company, memberData.position].filter(Boolean).join(' '),
-                  phoneNumber: memberData.phoneNumber || member.phoneNumber,
-                };
-              }
-              return member;
+              const enriched = enrichCompanyPosition(member.id, member.company || '', member.position || '');
+              return {
+                ...member,
+                name: memberData?.name || member.name,
+                company: enriched.company,
+                position: enriched.position,
+                occupation: [enriched.company, enriched.position].filter(Boolean).join(' '),
+                phoneNumber: memberData?.phoneNumber || member.phoneNumber,
+              };
             }) || []
           };
         });
