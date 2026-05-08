@@ -105,6 +105,16 @@ const CompleteGoogleProfile = () => {
       newErrors.birthYear = '올바른 연도를 입력해주세요. (예: 1990)';
     }
 
+    // 게스트 산행 신청 시 회사 및 직책 필수
+    if (guestEventId) {
+      if (!formData.company.trim()) {
+        newErrors.company = '소속(회사명)을 입력해주세요.';
+      }
+      if (!formData.position.trim()) {
+        newErrors.position = '직책을 입력해주세요.';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -784,7 +794,7 @@ const CompleteGoogleProfile = () => {
               <div className="space-y-5">
                 <div>
                   <label className="block text-white font-semibold mb-2 text-sm">
-                    소속 (회사명)
+                    소속 (회사명) {guestEventId && <span className="text-red-400">*</span>}
                   </label>
                   <input
                     type="text"
@@ -806,7 +816,7 @@ const CompleteGoogleProfile = () => {
 
                 <div>
                   <label className="block text-white font-semibold mb-2 text-sm">
-                    직책
+                    직책 {guestEventId && <span className="text-red-400">*</span>}
                   </label>
                   <input
                     type="text"

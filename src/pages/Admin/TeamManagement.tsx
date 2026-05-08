@@ -44,17 +44,20 @@ const TeamManagement = () => {
     members: [],
   });
 
-  // Load events from context (오늘 이후만)
+  // Load events from context (오늘 이후만) + 첫 번째 산행 자동 선택
   useEffect(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
-    const upcomingEvents = contextEvents.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate >= today;
-    });
-    
+
+    const upcomingEvents = contextEvents
+      .filter(event => new Date(event.date) >= today)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     setEvents(upcomingEvents);
+
+    if (!selectedEventIdForTeam && upcomingEvents.length > 0) {
+      setSelectedEventIdForTeam(upcomingEvents[0].id);
+    }
   }, [contextEvents]);
 
   // Load teams from context when eventId changes
@@ -231,15 +234,16 @@ const TeamManagement = () => {
     return activeParticipations.map(p => {
       const member = members.find(m => m.id === p.userId);
       const pStatus = paymentStatusMap.get(p.id) || 'none';
-      
+
+      const company = member?.company || (p as any).userCompany || '';
+      const position = member?.position || (p as any).userPosition || '';
+
       return {
         id: p.id,
         name: member?.name || p.userName,
-        company: member?.company || '',
-        position: member?.position || '',
-        occupation: member?.company && member?.position 
-          ? `${member.company} ${member.position}` 
-          : member?.company || member?.position || '',
+        company,
+        position,
+        occupation: company && position ? `${company} ${position}` : company || position || '',
         phone: member?.phoneNumber || p.userPhone || '',
         phoneNumber: member?.phoneNumber || p.userPhone || '',
         isGuest: p.isGuest,
@@ -277,7 +281,9 @@ const TeamManagement = () => {
       editingTeam.members.forEach(member => assignedMemberIds.delete(member.id));
     }
     
-    return applicants.filter(member => !assignedMemberIds.has(member.id));
+    return applicants
+      .filter(member => !assignedMemberIds.has(member.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   };
 
   const availableMembers = getAvailableMembers(selectedEventIdForTeam);
