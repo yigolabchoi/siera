@@ -96,17 +96,14 @@ const TeamManagement = () => {
           eventParticipations.map(p => [p.id, p])
         );
 
-        // 회사/직책 보강 헬퍼: members DB 우선, 없으면 participation fallback
+        // 회사/직책 보강 헬퍼: members DB 우선, 없으면 participation fallback (게스트는 participation에만 있음)
         const enrichCompanyPosition = (participationId: string, fallbackCompany = '', fallbackPosition = '') => {
           const userId = participationUserMap.get(participationId);
           const memberData = userId ? members.find(m => m.id === userId) : null;
-          if (memberData) {
-            return { company: memberData.company || '', position: memberData.position || '' };
-          }
           const p = participationDataMap.get(participationId);
           return {
-            company: (p as any)?.userCompany || fallbackCompany,
-            position: (p as any)?.userPosition || fallbackPosition,
+            company: memberData?.company || (p as any)?.userCompany || fallbackCompany,
+            position: memberData?.position || (p as any)?.userPosition || fallbackPosition,
           };
         };
 
@@ -364,24 +361,24 @@ const TeamManagement = () => {
   };
 
   const handleEditTeam = (team: Team) => {
-    // 조장 정보를 members DB에서 보강
+    // 조장 정보를 members DB 또는 participation(게스트)에서 보강
     const eventParticipations = getParticipationsByEvent(selectedEventIdForTeam);
     let enrichedTeam = { ...team };
-    
+
     if (team.leaderId) {
       const leaderParticipation = eventParticipations.find(p => p.id === team.leaderId);
       const leaderMember = leaderParticipation ? members.find(m => m.id === leaderParticipation.userId) : null;
-      if (leaderMember) {
-        enrichedTeam = {
-          ...enrichedTeam,
-          leaderName: leaderMember.name || team.leaderName,
-          leaderCompany: leaderMember.company || '',
-          leaderPosition: leaderMember.position || '',
-          leaderOccupation: [leaderMember.company, leaderMember.position].filter(Boolean).join(' '),
-        };
-      }
+      const leaderCompany = leaderMember?.company || (leaderParticipation as any)?.userCompany || team.leaderCompany || '';
+      const leaderPosition = leaderMember?.position || (leaderParticipation as any)?.userPosition || team.leaderPosition || '';
+      enrichedTeam = {
+        ...enrichedTeam,
+        leaderName: leaderMember?.name || team.leaderName,
+        leaderCompany,
+        leaderPosition,
+        leaderOccupation: [leaderCompany, leaderPosition].filter(Boolean).join(' '),
+      };
     }
-    
+
     setEditingTeam(enrichedTeam);
     setTeamFormData(enrichedTeam);
     setIsEditingTeam(true);
@@ -637,14 +634,14 @@ const TeamManagement = () => {
                 {teamFormData.members.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {teamFormData.members.map((member) => {
-                      // members DB에서 최신 정보 조회
+                      // members DB 또는 participation(게스트)에서 최신 정보 조회
                       const eventParticipations = getParticipationsByEvent(selectedEventIdForTeam);
                       const participation = eventParticipations.find(p => p.id === member.id);
                       const memberData = participation ? members.find(m => m.id === participation.userId) : null;
-                      
+
                       const displayName = memberData?.name || member.name;
-                      const displayCompany = memberData?.company || member.company || '';
-                      const displayPosition = memberData?.position || member.position || '';
+                      const displayCompany = memberData?.company || (participation as any)?.userCompany || member.company || '';
+                      const displayPosition = memberData?.position || (participation as any)?.userPosition || member.position || '';
                       const displayInfo = displayCompany && displayPosition
                         ? `${displayCompany} / ${displayPosition}`
                         : displayCompany || displayPosition || member.occupation || '소속/직책 미등록';

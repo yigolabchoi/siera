@@ -71,12 +71,13 @@ const EventPrintView = () => {
     };
 
     const enrichLeader = (team: Team) => {
-      const leaderUserId = team.leaderId || '';
-      const p = userIdParticipationMap.get(leaderUserId);
+      // leaderId is a participationId, NOT a userId — use participationDataMap
+      const leaderParticipationId = team.leaderId || '';
+      const p = participationDataMap.get(leaderParticipationId);
       return {
         leaderCompany: (team as any).leaderCompany || (p as any)?.userCompany || '',
         leaderPosition: (team as any).leaderPosition || (p as any)?.userPosition || '',
-        leaderIsGuest: (team as any).leaderIsGuest || userIdGuestMap.get(leaderUserId) || false,
+        leaderIsGuest: (team as any).leaderIsGuest || participationGuestMap.get(leaderParticipationId) || false,
       };
     };
 
