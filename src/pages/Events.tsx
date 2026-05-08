@@ -160,14 +160,45 @@ const Events = () => {
     }
   }, [refreshParticipations, refreshEventParticipants, selectedEvent?.id]);
 
-  // 조 편성 (Firebase에서 로드) — 번호 오름차순 정렬
-  const teams = event
-    ? [...getTeamsByEventId(event.id)].sort((a, b) => {
-        const numA = (a as any).number ?? parseInt(a.name) ?? 0;
-        const numB = (b as any).number ?? parseInt(b.name) ?? 0;
-        return numA - numB;
-      })
-    : [];
+  // 조 편성 (Firebase에서 로드) — 번호 오름차순 정렬 + 게스트 회사/직책 보강
+  const teams = useMemo(() => {
+    if (!event) return [];
+    const rawTeams = [...getTeamsByEventId(event.id)].sort((a, b) => {
+      const numA = (a as any).number ?? parseInt(a.name) ?? 0;
+      const numB = (b as any).number ?? parseInt(b.name) ?? 0;
+      return numA - numB;
+    });
+    // participationId → participation 맵 (게스트 회사/직책 fallback)
+    const participationDataMap = new Map(eventParticipations.map(p => [p.id, p]));
+    const participationUserMap = new Map(eventParticipations.map(p => [p.id, p.userId]));
+
+    return rawTeams.map(team => {
+      const leaderP = participationDataMap.get(team.leaderId || '');
+      const leaderUserId = participationUserMap.get(team.leaderId || '');
+      const leaderMember = leaderUserId ? members.find(m => m.id === leaderUserId) : null;
+      const leaderCompany = leaderMember?.company || (leaderP as any)?.userCompany || (team as any).leaderCompany || '';
+      const leaderPosition = leaderMember?.position || (leaderP as any)?.userPosition || (team as any).leaderPosition || '';
+
+      const enrichedMembers = (team.members || []).map(member => {
+        const memberP = participationDataMap.get(member.id);
+        const memberUserId = participationUserMap.get(member.id);
+        const memberData = memberUserId ? members.find(m => m.id === memberUserId) : null;
+        return {
+          ...member,
+          company: memberData?.company || (memberP as any)?.userCompany || member.company || '',
+          position: memberData?.position || (memberP as any)?.userPosition || member.position || '',
+        };
+      });
+
+      return {
+        ...team,
+        leaderCompany,
+        leaderPosition,
+        leaderOccupation: [leaderCompany, leaderPosition].filter(Boolean).join(' · '),
+        members: enrichedMembers,
+      };
+    });
+  }, [event, getTeamsByEventId, eventParticipations, members]);
   
   // 현재 사용자의 신청 여부 확인
   const userParticipation = useMemo(() => {
