@@ -406,6 +406,8 @@ export interface Payment {
   refundDate?: string; // 환불 완료일
   refundAmount?: number; // 환불 금액
   refundReason?: string; // 환불 사유
+  cancelledAt?: string; // 강제 취소 일시
+  cancelReason?: string; // 강제 취소 사유
   createdAt: string;
   updatedAt: string;
 }
