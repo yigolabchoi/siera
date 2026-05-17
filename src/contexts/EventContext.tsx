@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, getDocsFromServer } from 'firebase/firestore';
 import { db } from '../lib/firebase/config';
 import { HikingEvent, Participant, Team, TeamMember, Participation, EventWeather, User } from '../types';
 import { getDocuments, setDocument, updateDocument as firestoreUpdate, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
@@ -40,59 +40,77 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef(false);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // events 컬렉션 실시간 리스너 - Firestore 변경 즉시 반영
+  // events 초기화: 서버에서 직접 로드 (IndexedDB 캐시 우회) + onSnapshot으로 실시간 업데이트
   useEffect(() => {
-    // 캐시 데이터만 오고 서버 응답이 늦을 경우를 위한 4초 타임아웃 폴백
-    loadingTimeoutRef.current = setTimeout(() => {
-      if (!initializedRef.current) {
-        initializedRef.current = true;
-        setIsLoading(false);
-        loadInitialData();
-      }
-    }, 4000);
+    let isMounted = true;
 
-    const unsubscribe = onSnapshot(
-      collection(db, 'events'),
-      (snapshot) => {
+    const finishInitialization = (eventsData: HikingEvent[]) => {
+      if (!isMounted || initializedRef.current) return;
+      initializedRef.current = true;
+      setEvents(eventsData);
+      setIsLoading(false);
+      loadInitialData();
+    };
+
+    // 1) 서버에서 직접 최신 데이터 로드 (캐시 완전 우회, 5초 타임아웃)
+    const serverLoad = async () => {
+      try {
+        const snapshot = await Promise.race([
+          getDocsFromServer(collection(db, 'events')),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 5000)
+          ),
+        ]);
+        if (!isMounted) return;
         const eventsData: HikingEvent[] = [];
         snapshot.forEach((doc) => {
           eventsData.push({ id: doc.id, ...doc.data() } as HikingEvent);
         });
-        setEvents(eventsData);
-
-        // 서버에서 온 최신 데이터일 때만 로딩 완료 처리
-        // fromCache=false: 서버 데이터 확인됨 → 특별산행 등 최신 상태 보장
-        // fromCache=true: IndexedDB 캐시 (stale 가능) → 타임아웃 폴백까지 대기
-        if (!snapshot.metadata.fromCache && !initializedRef.current) {
+        finishInitialization(eventsData);
+      } catch {
+        // 타임아웃 또는 네트워크 오류 → onSnapshot 캐시 데이터로 폴백
+        if (isMounted && !initializedRef.current) {
           initializedRef.current = true;
-          if (loadingTimeoutRef.current) {
-            clearTimeout(loadingTimeoutRef.current);
-            loadingTimeoutRef.current = null;
-          }
           setIsLoading(false);
           loadInitialData();
+        }
+      }
+    };
+
+    serverLoad();
+
+    // 2) onSnapshot으로 이후 실시간 변경사항 반영
+    const unsubscribe = onSnapshot(
+      collection(db, 'events'),
+      (snapshot) => {
+        if (!isMounted) return;
+        const eventsData: HikingEvent[] = [];
+        snapshot.forEach((doc) => {
+          eventsData.push({ id: doc.id, ...doc.data() } as HikingEvent);
+        });
+        // 초기화 전이면 캐시 데이터로 폴백 초기화, 이후엔 실시간 업데이트
+        if (!initializedRef.current) {
+          finishInitialization(eventsData);
+        } else {
+          setEvents(eventsData);
         }
       },
       (err) => {
         console.error('❌ events onSnapshot 실패:', err);
         setError(err.message);
-        if (loadingTimeoutRef.current) {
-          clearTimeout(loadingTimeoutRef.current);
-          loadingTimeoutRef.current = null;
+        if (isMounted && !initializedRef.current) {
+          initializedRef.current = true;
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     );
 
     return () => {
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-      }
+      isMounted = false;
       unsubscribe();
     };
-  }, []); // 마운트 시 한 번만 구독
+  }, []); // 마운트 시 한 번만
   
   const loadInitialData = async () => {
     try {
