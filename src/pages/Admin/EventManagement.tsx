@@ -585,11 +585,11 @@ const EventManagement = () => {
     const event = events.find(e => e.id === eventId);
     if (!event) return;
     
-    if (!event.paymentInfo?.bankName || !event.paymentInfo?.accountNumber) {
+    if (!event.isSpecial && (!event.paymentInfo?.bankName || !event.paymentInfo?.accountNumber)) {
       alert('입금 정보를 먼저 입력해주세요.');
       return;
     }
-    
+
     if (!event.applicationDeadline) {
       alert('신청 마감일을 먼저 설정해주세요.');
       return;

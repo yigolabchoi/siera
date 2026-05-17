@@ -59,8 +59,8 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
       setIsLoading(true);
       setError(null);
       
-      // Firebase에서 이벤트 로드
-      const eventsResult = await getDocuments<HikingEvent>('events');
+      // Firebase에서 이벤트 로드 (캐시 무시하고 항상 서버에서 읽기)
+      const eventsResult = await getDocuments<HikingEvent>('events', undefined, true);
       
       if (eventsResult.success && eventsResult.data) {
         setEvents(eventsResult.data);
@@ -217,11 +217,11 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   // 특별 산행 (isSpecial이 true이고 가장 가까운 미래 이벤트)
   const specialEvent = useMemo(() => {
     const event = events
-      .filter(event => 
-        new Date(event.date) >= new Date() && 
-        event.isSpecial === true &&
+      .filter(event =>
+        new Date(event.date) >= new Date() &&
+        !!event.isSpecial && // 특별산행 플래그 (truthy 비교로 유연하게)
         event.isDraft !== true && // 임시 저장 제외
-        event.isPublished === true // 공개된 이벤트만
+        (event.isPublished === true || event.status === 'open' || event.status === 'closed') // 공개/접수중/마감 포함
       )
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0] || null;
     
@@ -254,8 +254,8 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     try {
       const result = await firestoreUpdate('events', id, updatedEvent);
       if (result.success) {
-        // Firebase에서 최신 데이터 다시 로드
-        const refreshResult = await getDocuments<HikingEvent>('events');
+        // Firebase에서 최신 데이터 다시 로드 (서버에서)
+        const refreshResult = await getDocuments<HikingEvent>('events', undefined, true);
         if (refreshResult.success && refreshResult.data) {
           setEvents(refreshResult.data);
         } else {
@@ -458,7 +458,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const refreshEvents = useCallback(async () => {
     try {
       setIsLoading(true);
-      const result = await getDocuments<HikingEvent>('events');
+      const result = await getDocuments<HikingEvent>('events', undefined, true);
       if (result.success && result.data) {
         setEvents(result.data);
       }

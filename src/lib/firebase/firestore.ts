@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -95,11 +96,12 @@ export const getDocument = async <T>(
 export const getDocuments = async <T>(
   collectionName: string,
   constraints?: QueryConstraint[],
+  fromServer?: boolean,
 ): Promise<FirestoreResult<T[]>> => {
   try {
     const collectionRef = collection(db, collectionName);
     const q = constraints ? query(collectionRef, ...constraints) : collectionRef;
-    const snapshot = await getDocs(q);
+    const snapshot = fromServer ? await getDocsFromServer(q) : await getDocs(q);
 
     const documents: T[] = [];
     snapshot.forEach((docSnap) => {
