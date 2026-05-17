@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase/config';
 import { HikingEvent, Participant, Team, TeamMember, Participation, EventWeather, User } from '../types';
 import { getDocuments, setDocument, updateDocument as firestoreUpdate, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
 import { logError, ErrorLevel, ErrorCategory } from '../utils/errorHandler';
@@ -39,32 +41,44 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  
-  // Firebase 초기 데이터 로드 - Auth와 독립적 (public access)
+
+  // events 컬렉션 실시간 리스너 - Firestore 변경 즉시 반영
   useEffect(() => {
-    const initializeData = async () => {
-      // 한 번도 로드하지 않았다면 로드 (Auth와 무관하게 즉시 실행)
-      if (!hasLoadedOnce) {
-        await loadInitialData();
-        setHasLoadedOnce(true);
+    const unsubscribe = onSnapshot(
+      collection(db, 'events'),
+      (snapshot) => {
+        const eventsData: HikingEvent[] = [];
+        snapshot.forEach((doc) => {
+          eventsData.push({ id: doc.id, ...doc.data() } as HikingEvent);
+        });
+        setEvents(eventsData);
+        // 처음 데이터 수신 시 나머지 데이터도 로드
+        if (!hasLoadedOnce) {
+          setHasLoadedOnce(true);
+        }
+      },
+      (err) => {
+        console.error('❌ events onSnapshot 실패:', err);
+        setError(err.message);
       }
-    };
-    
-    // Auth와 무관하게 즉시 실행
-    initializeData();
+    );
+    return () => unsubscribe();
+  }, []); // 마운트 시 한 번만 구독
+
+  // 이벤트 로드 후 나머지 데이터(teams, participants) 초기 로드
+  useEffect(() => {
+    if (hasLoadedOnce) {
+      loadInitialData();
+    }
   }, [hasLoadedOnce]);
   
   const loadInitialData = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      // Firebase에서 이벤트 로드 (캐시 무시하고 항상 서버에서 읽기)
-      const eventsResult = await getDocuments<HikingEvent>('events', undefined, true);
-      
-      if (eventsResult.success && eventsResult.data) {
-        setEvents(eventsResult.data);
-        
+
+      // events는 onSnapshot이 실시간으로 관리하므로 여기서는 teams/participants만 로드
+      {
         // Firebase에서 조편성 데이터 로드
         const teamsResult = await getDocuments<Team>('teams');
         if (teamsResult.success && teamsResult.data) {
