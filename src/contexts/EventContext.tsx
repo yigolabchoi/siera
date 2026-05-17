@@ -1,10 +1,9 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useMemo, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase/config';
 import { HikingEvent, Participant, Team, TeamMember, Participation, EventWeather, User } from '../types';
 import { getDocuments, setDocument, updateDocument as firestoreUpdate, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
 import { logError, ErrorLevel, ErrorCategory } from '../utils/errorHandler';
-import { waitForFirebase } from '../lib/firebase/config';
 import { getEventWeather } from '../utils/weather';
 
 interface EventContextType {
@@ -40,7 +39,7 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [teams, setTeams] = useState<Record<string, Team[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const initializedRef = useRef(false);
 
   // events 컬렉션 실시간 리스너 - Firestore 변경 즉시 반영
   useEffect(() => {
@@ -52,29 +51,23 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
           eventsData.push({ id: doc.id, ...doc.data() } as HikingEvent);
         });
         setEvents(eventsData);
-        // 처음 데이터 수신 시 나머지 데이터도 로드
-        if (!hasLoadedOnce) {
-          setHasLoadedOnce(true);
+        if (!initializedRef.current) {
+          initializedRef.current = true;
+          setIsLoading(false); // 첫 데이터 수신 즉시 로딩 해제
+          loadInitialData();   // teams/participants는 백그라운드로 로드
         }
       },
       (err) => {
         console.error('❌ events onSnapshot 실패:', err);
         setError(err.message);
+        setIsLoading(false); // 에러 시에도 로딩 스피너 해제
       }
     );
     return () => unsubscribe();
   }, []); // 마운트 시 한 번만 구독
-
-  // 이벤트 로드 후 나머지 데이터(teams, participants) 초기 로드
-  useEffect(() => {
-    if (hasLoadedOnce) {
-      loadInitialData();
-    }
-  }, [hasLoadedOnce]);
   
   const loadInitialData = async () => {
     try {
-      setIsLoading(true);
       setError(null);
 
       // events는 onSnapshot이 실시간으로 관리하므로 여기서는 teams/participants만 로드
@@ -201,8 +194,6 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
     } catch (err: any) {
       console.error('❌ Firebase 로드 실패:', err.message);
       setError(err.message);
-    } finally {
-      setIsLoading(false);
     }
   };
   
