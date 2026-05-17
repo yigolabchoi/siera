@@ -607,24 +607,14 @@ const Events = () => {
                         <span className="px-2.5 py-1 bg-white/10 text-white text-xs rounded-lg font-medium">
                           참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}
                         </span>
-                        {specialEvent.depositAmount && (
-                          <span className="px-2.5 py-1 bg-white/10 text-amber-200 text-xs rounded-lg font-medium">
-                            예약금 {specialEvent.depositAmount.toLocaleString()}원
-                          </span>
-                        )}
                       </div>
                     )}
 
                     {/* 신청 마감 */}
-                    {(specialEvent.applicationDeadline || specialEvent.depositDeadline) && (
+                    {specialEvent.applicationDeadline && (
                       <div className="flex items-center gap-1.5 text-amber-300 text-xs font-medium">
                         <Clock className="w-3.5 h-3.5" />
-                        {specialEvent.applicationDeadline && (
-                          <span>마감 {specialEvent.applicationDeadline}</span>
-                        )}
-                        {specialEvent.depositDeadline && (
-                          <span className="ml-1 text-purple-300">· 예약금 마감 {specialEvent.depositDeadline}</span>
-                        )}
+                        <span>마감 {specialEvent.applicationDeadline}</span>
                       </div>
                     )}
                   </div>
@@ -701,12 +691,6 @@ const Events = () => {
                     <p className="text-white font-bold text-sm">{event.paymentInfo?.cost || event.cost}</p>
                   </div>
                 )}
-                {event.depositAmount && (
-                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><CreditCard className="w-3 h-3" />예약금</p>
-                    <p className="text-white font-bold text-sm">{event.depositAmount.toLocaleString()}원</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -737,22 +721,6 @@ const Events = () => {
                     <div>
                       <p className="text-sm font-semibold text-emerald-900">참가비</p>
                       <p className="text-sm text-emerald-700">{event.paymentInfo?.cost || event.cost}</p>
-                    </div>
-                  </div>
-                )}
-                {/* 예약금 */}
-                {event.depositAmount && (
-                  <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl">
-                    <CreditCard className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">예약금</p>
-                      <p className="text-sm text-amber-700">
-                        {event.depositAmount.toLocaleString()}원 입금
-                        {event.depositDeadline && ` (마감: ${event.depositDeadline})`}
-                      </p>
-                      {event.balanceDeadline && (
-                        <p className="text-xs text-amber-600 mt-0.5">잔금 마감: {event.balanceDeadline}</p>
-                      )}
                     </div>
                   </div>
                 )}

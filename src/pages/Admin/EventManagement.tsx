@@ -302,7 +302,7 @@ const EventManagement = () => {
                 participants: attendanceCount,
                 photos: [], // 추후 갤러리에서 채워짐
                 summary: event.description || '',
-                isSpecial: event.isSpecial === true, // 특별산행은 hikingCount 집계 제외
+                isSpecial: event.isSpecial === true,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               };
@@ -674,7 +674,7 @@ const EventManagement = () => {
           participants: attendanceCount,
           photos: [], // 추후 갤러리에서 채워짐
           summary: event.description || '',
-          isSpecial: event.isSpecial === true, // 특별산행은 hikingCount 집계 제외
+          isSpecial: event.isSpecial === true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -1231,41 +1231,6 @@ const EventManagement = () => {
                           onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
                           className="input-field"
                           min={formData.date || undefined}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 예약금 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">예약금 (원)</label>
-                        <input
-                          type="number"
-                          value={formData.depositAmount || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, depositAmount: parseInt(e.target.value) || undefined }))}
-                          className="input-field"
-                          placeholder="600000"
-                        />
-                        {formData.depositAmount && (
-                          <p className="text-xs text-emerald-600 mt-1">{formData.depositAmount.toLocaleString()}원</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">예약금 마감일</label>
-                        <input
-                          type="date"
-                          value={formData.depositDeadline || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, depositDeadline: e.target.value }))}
-                          className="input-field"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">잔금 마감일</label>
-                        <input
-                          type="date"
-                          value={formData.balanceDeadline || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, balanceDeadline: e.target.value }))}
-                          className="input-field"
                         />
                       </div>
                     </div>
