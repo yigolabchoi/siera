@@ -40,9 +40,19 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef(false);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // events 컬렉션 실시간 리스너 - Firestore 변경 즉시 반영
   useEffect(() => {
+    // 캐시 데이터만 오고 서버 응답이 늦을 경우를 위한 4초 타임아웃 폴백
+    loadingTimeoutRef.current = setTimeout(() => {
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        setIsLoading(false);
+        loadInitialData();
+      }
+    }, 4000);
+
     const unsubscribe = onSnapshot(
       collection(db, 'events'),
       (snapshot) => {
@@ -51,19 +61,37 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
           eventsData.push({ id: doc.id, ...doc.data() } as HikingEvent);
         });
         setEvents(eventsData);
-        if (!initializedRef.current) {
+
+        // 서버에서 온 최신 데이터일 때만 로딩 완료 처리
+        // fromCache=false: 서버 데이터 확인됨 → 특별산행 등 최신 상태 보장
+        // fromCache=true: IndexedDB 캐시 (stale 가능) → 타임아웃 폴백까지 대기
+        if (!snapshot.metadata.fromCache && !initializedRef.current) {
           initializedRef.current = true;
-          setIsLoading(false); // 첫 데이터 수신 즉시 로딩 해제
-          loadInitialData();   // teams/participants는 백그라운드로 로드
+          if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
+          setIsLoading(false);
+          loadInitialData();
         }
       },
       (err) => {
         console.error('❌ events onSnapshot 실패:', err);
         setError(err.message);
-        setIsLoading(false); // 에러 시에도 로딩 스피너 해제
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
+        setIsLoading(false);
       }
     );
-    return () => unsubscribe();
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+      unsubscribe();
+    };
   }, []); // 마운트 시 한 번만 구독
   
   const loadInitialData = async () => {
