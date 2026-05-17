@@ -138,7 +138,7 @@ const PaymentManagement = () => {
         title: event.title,
         mountain: event.mountain || event.location,
         date: event.date,
-        cost: parseInt(event.cost.replace(/[^0-9]/g, '')),
+        cost: parseInt((event.paymentInfo?.cost || event.cost).replace(/[^0-9]/g, '')),
         maxParticipants: event.maxParticipants,
         currentParticipants: event.currentParticipants || 0,
         status: event.status || 'draft',

@@ -1211,7 +1211,7 @@ const Events = () => {
                 </div>
                 <div className="flex justify-between items-center p-2.5 sm:p-3 bg-slate-50 rounded-lg text-sm sm:text-base">
                   <span className="text-slate-600">참가비</span>
-                  <span className="font-semibold text-slate-900">{event.cost}</span>
+                  <span className="font-semibold text-slate-900">{event.paymentInfo?.cost || event.cost}</span>
                 </div>
                 {event.paymentInfo && (
                   <div className="p-2.5 sm:p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm sm:text-base">
@@ -1988,7 +1988,7 @@ const Events = () => {
                 {/* 참가비 */}
                 <Card className="bg-primary-50 border-2 border-primary-200">
                   <p className="text-sm text-primary-700 mb-1 font-medium">참가비</p>
-                  <p className="text-3xl font-bold text-primary-900">{event.cost}</p>
+                  <p className="text-3xl font-bold text-primary-900">{event.paymentInfo?.cost || event.cost}</p>
                 </Card>
                 
                 {/* 계좌 정보 */}
@@ -2050,7 +2050,7 @@ const Events = () => {
                     if (event.paymentInfo) {
                       const copyText = `[산행 신청 완료]
 산행명: ${event.title}
-참가비: ${event.cost}
+참가비: ${event.paymentInfo?.cost || event.cost}
 
 [입금 정보]
 은행명: ${event.paymentInfo.bankName}

@@ -181,7 +181,7 @@ const EventManagement = () => {
     const coursesText = [courseRouteLines, timeSummaryLine].filter(Boolean).join('\n');
 
     // 참가비
-    const costLine = event.cost ? `참가비: ${event.cost}` : '';
+    const costLine = (event.paymentInfo?.cost || event.cost) ? `참가비: ${event.paymentInfo?.cost || event.cost}` : '';
 
     const lines = [
       yearMonthLine,
@@ -358,6 +358,7 @@ const EventManagement = () => {
       id: editingEvent ? editingEvent.id : `event-${Date.now()}`,
       eventNumber: eventNum,
       title: autoTitle,
+      cost: formData.paymentInfo?.cost || formData.cost, // paymentInfo.cost와 동기화
       isDraft: true, // 임시 저장 플래그
       isPublished: false, // 임시 저장은 비공개
       status: 'draft' as const,
@@ -403,6 +404,7 @@ const EventManagement = () => {
       id: editingEvent ? editingEvent.id : `event-${Date.now()}`,
       eventNumber: eventNum,
       title: autoTitle,
+      cost: formData.paymentInfo?.cost || formData.cost, // paymentInfo.cost와 동기화
       isDraft: false, // 정식 저장
       isPublished: hasPaymentInfo ? true : false, // 입금 정보 완료 시 자동 공개
       currentParticipants: editingEvent?.currentParticipants || 0,
@@ -2452,7 +2454,7 @@ const EventManagement = () => {
                             <span className="text-slate-300 hidden sm:inline">|</span>
                             <div className="flex items-center gap-1">
                               <span className="text-slate-600">참가비</span>
-                              <span className="font-semibold text-slate-900">{event.cost}</span>
+                              <span className="font-semibold text-slate-900">{event.paymentInfo?.cost || event.cost}</span>
                             </div>
                             {event.applicationDeadline && (
                               <>
