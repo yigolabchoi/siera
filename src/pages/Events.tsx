@@ -344,7 +344,34 @@ const Events = () => {
     }
   }, [searchParams, applicationClosed, isUserApplied, event]);
   
-  const handleRegister = () => {
+  const handleSpecialEventRegister = async () => {
+    if (isSubmitting || !user || !event) return;
+    if (isUserApplied) { alert('이미 참석 신청이 완료되었습니다.'); return; }
+    setIsSubmitting(true);
+    try {
+      await addParticipation({
+        eventId: event.id,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email || '',
+        userPhone: user.phoneNumber || '',
+        userCompany: user.company || '',
+        userPosition: user.position || '',
+        status: 'pending',
+        paymentStatus: 'pending',
+        isGuest: false,
+        registeredAt: new Date().toISOString(),
+      });
+      setShowPaymentModal(true);
+    } catch (error) {
+      console.error('특별산행 신청 실패:', error);
+      alert(error instanceof Error ? error.message : '신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRegister = async () => {
     if (isUserApplied) {
       alert('이미 참석 신청이 완료되었습니다.');
       return;
@@ -363,7 +390,7 @@ const Events = () => {
     }
     // 특별산행은 코스 선택 없이 바로 신청
     if (isSpecialEvent) {
-      handleCourseSelect('');
+      await handleSpecialEventRegister();
       return;
     }
     // 정기산행: 코스 선택 모달 표시
@@ -404,7 +431,7 @@ const Events = () => {
       setShowPaymentModal(true);
     } catch (error) {
       console.error('참석 신청 실패:', error);
-      alert('신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+      alert(error instanceof Error ? error.message : '신청 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setIsSubmitting(false);
     }
@@ -630,40 +657,51 @@ const Events = () => {
         </div>
       )}
 
-      {/* ── 특별산행 상세 뷰 (특별산행 클릭 시) ── */}
+      {/* ── 특별산행 상세 뷰 ── */}
       {isSpecialEvent && event && (
         <div className="mb-8 sm:mb-12">
+
           {/* 헤더 배너 */}
           <div className="relative overflow-hidden rounded-2xl shadow-xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 mb-6">
             <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
             <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl" />
-            <div className="relative p-6 sm:p-8">
+            {event.imageUrl && (
+              <img src={event.imageUrl} alt={event.title} className="absolute inset-0 w-full h-full object-cover opacity-20" />
+            )}
+            <div className="relative p-6 sm:p-8 md:p-10">
               {/* 뒤로 가기 + 뱃지 */}
-              <div className="flex items-center justify-between mb-4">
-                {currentEvent && (
-                  <Link
-                    to="/home/events"
-                    className="flex items-center gap-1.5 text-purple-300 hover:text-white transition-colors text-sm"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    정기산행으로 돌아가기
+              <div className="flex items-center justify-between mb-5">
+                {currentEvent ? (
+                  <Link to="/home/events" className="flex items-center gap-1.5 text-purple-300 hover:text-white transition-colors text-sm">
+                    <ChevronLeft className="w-4 h-4" />정기산행으로 돌아가기
                   </Link>
-                )}
-                {!currentEvent && <div />}
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-amber-900 rounded-full text-sm font-bold">
-                    {event.specialType === 'overseas' ? (
-                      <><Globe className="w-3.5 h-3.5" />해외산행</>
-                    ) : (
-                      <><Star className="w-3.5 h-3.5" />특별산행</>
-                    )}
-                  </span>
-                </div>
+                ) : <div />}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-amber-900 rounded-full text-sm font-bold">
+                  {event.specialType === 'overseas' ? <><Globe className="w-3.5 h-3.5" />해외산행</> : <><Star className="w-3.5 h-3.5" />특별산행</>}
+                </span>
               </div>
 
+              {/* 이벤트 번호 */}
+              {event.eventNumber && (
+                <p className="text-purple-300 text-sm font-medium mb-1">제{event.eventNumber}차 특별산행</p>
+              )}
+
               {/* 제목 */}
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2">{event.title}</h1>
-              <p className="text-purple-200 text-base sm:text-lg mb-5">{event.location}</p>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2">{event.mountain || event.title}</h1>
+              {event.mountain && event.title !== event.mountain && (
+                <p className="text-purple-200 text-lg mb-3">{event.title}</p>
+              )}
+              <div className="flex flex-wrap items-center gap-3 mb-6">
+                {event.location && <span className="flex items-center gap-1.5 text-purple-200 text-sm"><MapPin className="w-4 h-4" />{event.location}</span>}
+                {event.altitude && <span className="flex items-center gap-1.5 text-purple-200 text-sm"><TrendingUp className="w-4 h-4" />{event.altitude}</span>}
+                {event.difficulty && (
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    event.difficulty === '상' || event.difficulty === '중상' ? 'bg-red-500/20 text-red-200' :
+                    event.difficulty === '중' ? 'bg-amber-500/20 text-amber-200' :
+                    'bg-emerald-500/20 text-emerald-200'
+                  }`}>난이도 {event.difficulty}</span>
+                )}
+              </div>
 
               {/* 핵심 정보 그리드 */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -671,214 +709,317 @@ const Events = () => {
                   <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" />날짜</p>
                   <p className="text-white font-bold text-sm">
                     {event.date}
-                    {event.endDate && <><br /><span className="text-purple-200">~ {event.endDate}</span></>}
+                    {event.endDate && <><br /><span className="text-purple-200 text-xs">~ {event.endDate}</span></>}
                     {event.endDate && (() => {
-                      const s = new Date(event.date);
-                      const e2 = new Date(event.endDate!);
-                      const diff = Math.round((e2.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                      return <span className="text-amber-300 text-xs ml-1">{diff-1}박{diff}일</span>;
+                      const diff = Math.round((new Date(event.endDate!).getTime() - new Date(event.date).getTime()) / 86400000) + 1;
+                      return <span className="text-amber-300 text-xs ml-1 block">{diff-1}박{diff}일</span>;
                     })()}
                   </p>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
                   <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Users className="w-3 h-3" />신청 현황</p>
-                  <p className="text-white font-bold text-sm">
-                    {event.currentParticipants || 0}명 신청
-                  </p>
+                  <p className="text-white font-bold text-sm">{event.currentParticipants || 0}명 신청</p>
                 </div>
-                {(event.paymentInfo?.cost || event.cost) && (
+                {event.memberCost != null ? (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />회원 경비</p>
+                    <p className="text-white font-bold text-sm">{event.memberCost.toLocaleString()}원</p>
+                  </div>
+                ) : (event.paymentInfo?.cost || event.cost) ? (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
                     <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />참가비</p>
                     <p className="text-white font-bold text-sm">{event.paymentInfo?.cost || event.cost}</p>
+                  </div>
+                ) : null}
+                {event.applicationDeadline && (
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
+                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />신청 마감</p>
+                    <p className="text-white font-bold text-sm">{event.applicationDeadline.split('T')[0]}</p>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* 신청 안내 카드 */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            {/* 신청 정보 */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-              <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-purple-600" />
-                산행 안내
-              </h3>
-              <div className="space-y-3">
-                {/* 설명 */}
-                {event.description && (
-                  <p className="text-sm text-slate-700 leading-relaxed">{event.description}</p>
-                )}
-                {/* 집결 장소 */}
-                {(event.meetingPoint || event.address) && (
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                    <Navigation className="w-4 h-4 text-slate-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">집결 장소</p>
-                      {event.meetingPoint && <p className="text-sm text-slate-700">{event.meetingPoint}</p>}
-                      {event.address && <p className="text-xs text-slate-500 mt-0.5">{event.address}</p>}
-                    </div>
-                  </div>
-                )}
-                {/* 회원 신청 기간 */}
-                {(event.memberApplicationStart || event.memberApplicationEnd) && (
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl">
-                    <Clock className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-900">회원 신청 기간</p>
-                      <p className="text-sm text-blue-700">
-                        {event.memberApplicationStart || '—'} ~ {event.memberApplicationEnd || '—'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {/* 게스트 모집 기간 */}
-                {(event.guestApplicationStart || event.guestApplicationEnd) && (
-                  <div className="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl">
-                    <Clock className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-indigo-900">게스트 모집 기간</p>
-                      <p className="text-sm text-indigo-700">
-                        {event.guestApplicationStart || '—'} ~ {event.guestApplicationEnd || '—'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {/* 일반 신청 마감일 (특별산행 기간 미입력 시) */}
-                {event.applicationDeadline && !event.memberApplicationStart && !event.guestApplicationStart && (
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl">
-                    <Clock className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-blue-900">신청 마감일</p>
-                      <p className="text-sm text-blue-700">{event.applicationDeadline}</p>
-                    </div>
-                  </div>
-                )}
-                {/* 회원 경비 */}
-                {event.memberCost != null && (
-                  <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-xl">
-                    <Wallet className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-900">회원 경비</p>
-                      <p className="text-sm text-emerald-700">{event.memberCost.toLocaleString()}원</p>
-                    </div>
-                  </div>
-                )}
-                {/* 게스트 경비 */}
-                {event.guestCost != null && (
-                  <div className="flex items-start gap-3 p-3 bg-teal-50 rounded-xl">
-                    <Wallet className="w-4 h-4 text-teal-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-teal-900">게스트 경비</p>
-                      <p className="text-sm text-teal-700">{event.guestCost.toLocaleString()}원</p>
-                    </div>
-                  </div>
-                )}
-                {/* 기타 참가비 */}
-                {!(event.memberCost != null) && (event.paymentInfo?.cost || event.cost) && (
-                  <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-xl">
-                    <Wallet className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-900">참가비</p>
-                      <p className="text-sm text-emerald-700">{event.paymentInfo?.cost || event.cost}</p>
-                    </div>
-                  </div>
-                )}
-                {/* 예약금 */}
-                {event.depositAmount != null && (
-                  <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl">
-                    <CreditCard className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">예약금</p>
-                      <p className="text-sm text-amber-700">
-                        {event.depositAmount.toLocaleString()}원
-                        {event.depositDeadline && <span className="ml-2 text-amber-600">(마감: {event.depositDeadline})</span>}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {/* 잔금 마감 */}
-                {event.balanceDeadline && (
-                  <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-xl">
-                    <CreditCard className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-orange-900">잔금 마감</p>
-                      <p className="text-sm text-orange-700">{event.balanceDeadline}</p>
-                    </div>
-                  </div>
-                )}
-                {/* 입금 안내 */}
-                {event.specialPaymentNote && (
-                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-xl">
-                    <Bell className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-purple-900">입금 안내</p>
-                      <p className="text-sm text-purple-700">{event.specialPaymentNote}</p>
-                    </div>
-                  </div>
-                )}
-                {/* 입금 계좌 */}
-                {event.paymentInfo && (event.paymentInfo.bankName || event.paymentInfo.accountNumber) && (
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                    <CreditCard className="w-4 h-4 text-slate-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-900">입금 계좌</p>
-                      <p className="text-sm text-slate-700">
-                        {[event.paymentInfo.bankName, event.paymentInfo.accountNumber, event.paymentInfo.accountHolder].filter(Boolean).join(' ')}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* 메인 콘텐츠 + 사이드바 */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
-            {/* 신청 버튼 패널 */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
-              <div>
-                <h3 className="font-bold text-slate-900 text-base mb-3">신청 현황</h3>
-                <div className="mb-4">
-                  <div className="flex justify-between text-sm text-slate-600 mb-2">
-                    <span>신청 인원</span>
-                    <span className="font-semibold">{event.currentParticipants || 0} / {activeMemberCount}명</span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500 rounded-full transition-all"
-                      style={{ width: `${Math.min(100, ((event.currentParticipants || 0) / activeMemberCount) * 100)}%` }}
-                    />
+            {/* 왼쪽: 산행 상세 정보 */}
+            <div className="lg:col-span-2 space-y-5">
+
+              {/* 산행 소개 */}
+              {event.description && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-3 flex items-center gap-2">
+                    <Mountain className="w-5 h-5 text-purple-600" />산행 소개
+                  </h3>
+                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{event.description}</p>
+                </div>
+              )}
+
+              {/* 집결 장소 */}
+              {(event.meetingPoint || event.address) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-3 flex items-center gap-2">
+                    <Navigation className="w-5 h-5 text-purple-600" />집결 장소
+                  </h3>
+                  {event.meetingPoint && <p className="text-sm font-semibold text-slate-800 mb-1">{event.meetingPoint}</p>}
+                  {event.address && <p className="text-sm text-slate-600">{event.address}</p>}
+                </div>
+              )}
+
+              {/* 신청 기간 */}
+              {(event.memberApplicationStart || event.memberApplicationEnd || event.guestApplicationStart || event.guestApplicationEnd) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-purple-600" />신청 기간
+                  </h3>
+                  <div className="space-y-3">
+                    {(event.memberApplicationStart || event.memberApplicationEnd) && (
+                      <div className="flex items-start justify-between p-3 bg-blue-50 rounded-xl">
+                        <div>
+                          <p className="text-sm font-semibold text-blue-900">회원 신청</p>
+                          <p className="text-sm text-blue-700">{event.memberApplicationStart || '—'} ~ {event.memberApplicationEnd || '—'}</p>
+                        </div>
+                        <UserCheck className="w-4 h-4 text-blue-500 mt-0.5" />
+                      </div>
+                    )}
+                    {(event.guestApplicationStart || event.guestApplicationEnd) && (
+                      <div className="flex items-start justify-between p-3 bg-indigo-50 rounded-xl">
+                        <div>
+                          <p className="text-sm font-semibold text-indigo-900">게스트 모집</p>
+                          <p className="text-sm text-indigo-700">{event.guestApplicationStart || '—'} ~ {event.guestApplicationEnd || '—'}</p>
+                        </div>
+                        <Users className="w-4 h-4 text-indigo-500 mt-0.5" />
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                {isUserApplied ? (
-                  <>
-                    <div className="flex items-center gap-2 text-emerald-600 text-sm font-semibold mb-2">
-                      <CheckCircle className="w-4 h-4" />
-                      신청 완료
+              )}
+
+              {/* 비용 안내 */}
+              {(event.memberCost != null || event.guestCost != null || event.depositAmount != null || event.balanceDeadline || event.paymentInfo?.cost || event.cost) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-purple-600" />비용 안내
+                  </h3>
+                  <div className="space-y-3">
+                    {event.memberCost != null && (
+                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl">
+                        <span className="text-sm font-semibold text-emerald-900">회원 경비</span>
+                        <span className="text-sm font-bold text-emerald-700">{event.memberCost.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {event.guestCost != null && (
+                      <div className="flex items-center justify-between p-3 bg-teal-50 rounded-xl">
+                        <span className="text-sm font-semibold text-teal-900">게스트 경비</span>
+                        <span className="text-sm font-bold text-teal-700">{event.guestCost.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {event.memberCost == null && (event.paymentInfo?.cost || event.cost) && (
+                      <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl">
+                        <span className="text-sm font-semibold text-emerald-900">참가비</span>
+                        <span className="text-sm font-bold text-emerald-700">{event.paymentInfo?.cost || event.cost}</span>
+                      </div>
+                    )}
+                    {event.depositAmount != null && (
+                      <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl">
+                        <div>
+                          <span className="text-sm font-semibold text-amber-900">예약금</span>
+                          {event.depositDeadline && <p className="text-xs text-amber-600">마감: {event.depositDeadline}</p>}
+                        </div>
+                        <span className="text-sm font-bold text-amber-700">{event.depositAmount.toLocaleString()}원</span>
+                      </div>
+                    )}
+                    {event.balanceDeadline && (
+                      <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl">
+                        <span className="text-sm font-semibold text-orange-900">잔금 마감</span>
+                        <span className="text-sm font-bold text-orange-700">{event.balanceDeadline}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 입금 정보 */}
+              {(event.paymentInfo && (event.paymentInfo.bankName || event.paymentInfo.accountNumber) || event.specialPaymentNote) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
+                    <CreditCard className="w-5 h-5 text-purple-600" />입금 정보
+                  </h3>
+                  <div className="space-y-3">
+                    {event.specialPaymentNote && (
+                      <div className="p-3 bg-purple-50 rounded-xl">
+                        <p className="text-sm font-semibold text-purple-900 mb-1">입금 안내</p>
+                        <p className="text-sm text-purple-700">{event.specialPaymentNote}</p>
+                      </div>
+                    )}
+                    {event.paymentInfo && (event.paymentInfo.bankName || event.paymentInfo.accountNumber) && (
+                      <div className="p-3 bg-slate-50 rounded-xl">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm font-semibold text-slate-900">입금 계좌</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(event.paymentInfo!.accountNumber, '계좌번호')}
+                            className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 transition-colors"
+                          >
+                            {copiedText === '계좌번호' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {copiedText === '계좌번호' ? '복사됨' : '복사'}
+                          </button>
+                        </div>
+                        <p className="text-sm text-slate-700 font-mono">
+                          {[event.paymentInfo.bankName, event.paymentInfo.accountNumber].filter(Boolean).join(' ')}
+                        </p>
+                        {event.paymentInfo.accountHolder && (
+                          <p className="text-xs text-slate-500 mt-0.5">예금주: {event.paymentInfo.accountHolder}</p>
+                        )}
+                        {event.paymentInfo.managerName && (
+                          <p className="text-xs text-slate-500 mt-2">담당: {event.paymentInfo.managerName}{event.paymentInfo.managerPhone ? ` (${event.paymentInfo.managerPhone})` : ''}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 코스 안내 (A/B 코스) */}
+              {event.courses && event.courses.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
+                    <Backpack className="w-5 h-5 text-purple-600" />코스 안내
+                  </h3>
+                  <div className="space-y-3">
+                    {event.courses.map((course, idx) => (
+                      <div key={course.id || idx} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-purple-50 border-b border-purple-100">
+                          <span className="font-bold text-slate-900 text-sm">{course.name}</span>
+                          <div className="flex items-center gap-2">
+                            {course.difficulty && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                course.difficulty === '상' || course.difficulty === '중상' ? 'bg-red-100 text-red-700' :
+                                course.difficulty === '중' ? 'bg-amber-100 text-amber-700' :
+                                'bg-emerald-100 text-emerald-700'
+                              }`}>{course.difficulty}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-4">
+                          {course.description && <p className="text-sm text-slate-600 mb-3">{course.description}</p>}
+                          <div className="flex flex-wrap gap-4">
+                            {course.distance && (
+                              <div>
+                                <p className="text-xs text-slate-500">거리</p>
+                                <p className="text-sm font-semibold text-slate-800">{course.distance}</p>
+                              </div>
+                            )}
+                            {course.duration && (
+                              <div>
+                                <p className="text-xs text-slate-500">소요시간</p>
+                                <p className="text-sm font-semibold text-slate-800">{course.duration}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 긴급 연락처 */}
+              {(event.emergencyContactName || event.emergencyContactPhone) && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+                  <h3 className="font-bold text-slate-900 text-base mb-3 flex items-center gap-2">
+                    <Phone className="w-5 h-5 text-red-500" />긴급 연락처
+                  </h3>
+                  <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl">
+                    <div>
+                      {event.emergencyContactName && <p className="text-sm font-semibold text-slate-900">{event.emergencyContactName}</p>}
+                      {event.emergencyContactPhone && (
+                        <a href={`tel:${event.emergencyContactPhone}`} className="text-sm text-red-600 hover:text-red-800 font-medium">
+                          {event.emergencyContactPhone}
+                        </a>
+                      )}
                     </div>
-                    <button
-                      onClick={handleCancel}
-                      className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors"
-                    >
-                      신청 취소
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 오른쪽: 신청 패널 (sticky) */}
+            <div className="lg:col-span-1">
+              <div className="lg:sticky lg:top-6 space-y-4">
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                  <h3 className="font-bold text-slate-900 text-base mb-4">신청 현황</h3>
+                  <div className="mb-5">
+                    <div className="flex justify-between text-sm text-slate-600 mb-2">
+                      <span>신청 인원</span>
+                      <span className="font-semibold text-slate-900">{event.currentParticipants || 0} / {activeMemberCount}명</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, ((event.currentParticipants || 0) / activeMemberCount) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {isUserApplied ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-emerald-600 text-sm font-semibold p-3 bg-emerald-50 rounded-xl">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />신청이 완료되었습니다
+                      </div>
+                      <button
+                        onClick={handleCancel}
+                        className="w-full py-3 bg-slate-100 text-slate-700 rounded-xl font-semibold text-sm hover:bg-slate-200 transition-colors"
+                      >
+                        신청 취소
+                      </button>
+                    </div>
+                  ) : applicationClosed ? (
+                    <button disabled className="w-full py-3.5 bg-slate-100 text-slate-400 rounded-xl font-semibold text-sm cursor-not-allowed">
+                      신청 마감
                     </button>
-                  </>
-                ) : applicationClosed ? (
-                  <button disabled className="w-full py-3 bg-slate-100 text-slate-400 rounded-xl font-semibold text-sm cursor-not-allowed">
-                    신청 마감
-                  </button>
-                ) : !user ? (
-                  <Link to="/login" className="block w-full py-3 bg-purple-600 text-white rounded-xl font-semibold text-sm text-center hover:bg-purple-700 transition-colors">
-                    로그인 후 신청
-                  </Link>
-                ) : (
-                  <button
-                    onClick={handleRegister}
-                    disabled={isSubmitting}
-                    className="w-full py-3 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-colors disabled:opacity-50"
-                  >
-                    {isSubmitting ? '신청 중...' : '참가 신청'}
-                  </button>
+                  ) : !user ? (
+                    <Link to="/login" className="block w-full py-3.5 bg-purple-600 text-white rounded-xl font-semibold text-sm text-center hover:bg-purple-700 transition-colors">
+                      로그인 후 신청
+                    </Link>
+                  ) : (
+                    <button
+                      onClick={handleRegister}
+                      disabled={isSubmitting}
+                      className="w-full py-3.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isSubmitting ? (
+                        <><span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />신청 처리 중...</>
+                      ) : '참가 신청하기'}
+                    </button>
+                  )}
+                </div>
+
+                {/* 신청자 요약 */}
+                {participants.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h3 className="font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-purple-600" />신청자 {participants.length}명
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {participants.slice(0, 12).map((p, idx) => (
+                        <div key={p.id || idx} title={`${p.name}${p.company ? ` (${p.company})` : ''}`}
+                          className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white shadow-sm">
+                          {p.profileImage ? (
+                            <img src={p.profileImage} alt={p.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-purple-600 text-xs font-bold">{p.name.charAt(0)}</span>
+                          )}
+                        </div>
+                      ))}
+                      {participants.length > 12 && (
+                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs text-slate-600 font-semibold">
+                          +{participants.length - 12}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -888,10 +1029,9 @@ const Events = () => {
           {event.dailySchedule && event.dailySchedule.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
               <h3 className="font-bold text-slate-900 text-base mb-5 flex items-center gap-2">
-                <Plane className="w-5 h-5 text-purple-600" />
-                상세 일정
+                <Plane className="w-5 h-5 text-purple-600" />상세 일정
               </h3>
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {event.dailySchedule.map((dayItem) => (
                   <div key={dayItem.day} className="border border-slate-100 rounded-xl overflow-hidden">
                     <div className="flex items-center gap-3 px-4 py-2.5 bg-purple-50 border-b border-purple-100">
@@ -901,11 +1041,11 @@ const Events = () => {
                     </div>
                     <div className="divide-y divide-slate-50">
                       {dayItem.items.map((item, idx) => (
-                        <div key={idx} className="flex gap-4 px-4 py-2.5">
+                        <div key={idx} className="flex gap-3 px-4 py-2.5">
                           {item.time ? (
-                            <span className="text-sm font-mono text-purple-600 font-semibold w-12 flex-shrink-0">{item.time}</span>
+                            <span className="text-sm font-mono text-purple-600 font-semibold w-14 flex-shrink-0">{item.time}</span>
                           ) : (
-                            <span className="w-12 flex-shrink-0" />
+                            <span className="w-14 flex-shrink-0" />
                           )}
                           <p className="text-sm text-slate-700">{item.description}</p>
                         </div>
@@ -917,30 +1057,46 @@ const Events = () => {
             </div>
           )}
 
-          {/* 참가자 목록 */}
-          {participants.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          {/* 정기 일정 (schedule) */}
+          {event.schedule && event.schedule.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
               <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-purple-600" />
-                신청자 목록 ({participants.length}명)
+                <Clock className="w-5 h-5 text-purple-600" />산행 일정
+              </h3>
+              <div className="divide-y divide-slate-100">
+                {event.schedule.map((item, idx) => (
+                  <div key={idx} className="flex gap-4 py-2.5">
+                    <span className="text-sm font-mono text-purple-600 font-semibold w-14 flex-shrink-0">{item.time}</span>
+                    <span className="text-sm text-slate-700">{item.location}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 신청자 목록 */}
+          {participants.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
+              <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-purple-600" />신청자 목록 ({participants.length}명)
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {participants.map((p, idx) => (
                   <div key={p.id || idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {p.profileImage ? (
-                        <img src={p.profileImage} alt={p.name} className="w-full h-full rounded-full object-cover" />
+                        <img src={p.profileImage} alt={p.name} className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-purple-600 text-xs font-bold">{p.name.charAt(0)}</span>
                       )}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900 truncate">{p.name}</p>
                       {(p.company || p.position) && (
-                        <p className="text-xs text-slate-500 truncate">{[p.company, p.position].filter(Boolean).join(' ')}</p>
+                        <p className="text-xs text-slate-500 truncate">{[p.company, p.position].filter(Boolean).join(' · ')}</p>
                       )}
                     </div>
-                    {p.isGuest && <span className="text-xs px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded ml-auto">게스트</span>}
+                    {p.isGuest && <span className="text-xs px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded ml-auto flex-shrink-0">게스트</span>}
                   </div>
                 ))}
               </div>
