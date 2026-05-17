@@ -601,29 +601,29 @@ const Events = () => {
                       )}
                     </div>
 
-                    {/* 경비 정보 */}
-                    {(specialEvent.memberCost || specialEvent.guestCost) && (
+                    {/* 참가비 */}
+                    {(specialEvent.paymentInfo?.cost || specialEvent.cost) && (
                       <div className="flex flex-wrap gap-2 mb-3">
-                        {specialEvent.memberCost && (
-                          <span className="px-2.5 py-1 bg-white/10 text-white text-xs rounded-lg font-medium">
-                            회원 {specialEvent.memberCost.toLocaleString()}원
-                          </span>
-                        )}
-                        {specialEvent.guestCost && (
-                          <span className="px-2.5 py-1 bg-white/10 text-white text-xs rounded-lg font-medium">
-                            게스트 {specialEvent.guestCost.toLocaleString()}원
+                        <span className="px-2.5 py-1 bg-white/10 text-white text-xs rounded-lg font-medium">
+                          참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}
+                        </span>
+                        {specialEvent.depositAmount && (
+                          <span className="px-2.5 py-1 bg-white/10 text-amber-200 text-xs rounded-lg font-medium">
+                            예약금 {specialEvent.depositAmount.toLocaleString()}원
                           </span>
                         )}
                       </div>
                     )}
 
-                    {/* 신청 기간 */}
-                    {specialEvent.memberApplicationStart && (
+                    {/* 신청 마감 */}
+                    {(specialEvent.applicationDeadline || specialEvent.depositDeadline) && (
                       <div className="flex items-center gap-1.5 text-amber-300 text-xs font-medium">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>신청 {specialEvent.memberApplicationStart} ~ {specialEvent.memberApplicationEnd || ''}</span>
-                        {specialEvent.depositAmount && (
-                          <span className="ml-1 text-purple-300">· 예약금 {specialEvent.depositAmount.toLocaleString()}원</span>
+                        {specialEvent.applicationDeadline && (
+                          <span>마감 {specialEvent.applicationDeadline}</span>
+                        )}
+                        {specialEvent.depositDeadline && (
+                          <span className="ml-1 text-purple-300">· 예약금 마감 {specialEvent.depositDeadline}</span>
                         )}
                       </div>
                     )}
@@ -695,16 +695,16 @@ const Events = () => {
                     <span className="text-purple-300 text-xs ml-1">({event.currentParticipants || 0}명 신청)</span>
                   </p>
                 </div>
-                {event.memberCost && (
+                {(event.paymentInfo?.cost || event.cost) && (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />회원 경비</p>
-                    <p className="text-white font-bold text-sm">{event.memberCost.toLocaleString()}원</p>
+                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />참가비</p>
+                    <p className="text-white font-bold text-sm">{event.paymentInfo?.cost || event.cost}</p>
                   </div>
                 )}
-                {event.guestCost && (
+                {event.depositAmount && (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />게스트 경비</p>
-                    <p className="text-white font-bold text-sm">{event.guestCost.toLocaleString()}원</p>
+                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><CreditCard className="w-3 h-3" />예약금</p>
+                    <p className="text-white font-bold text-sm">{event.depositAmount.toLocaleString()}원</p>
                   </div>
                 )}
               </div>
@@ -720,15 +720,27 @@ const Events = () => {
                 신청 안내
               </h3>
               <div className="space-y-3">
-                {event.memberApplicationStart && (
+                {/* 신청 마감일 */}
+                {event.applicationDeadline && (
                   <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-xl">
-                    <UserCheck className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <Clock className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-semibold text-blue-900">회원 신청 기간</p>
-                      <p className="text-sm text-blue-700">{event.memberApplicationStart} ~ {event.memberApplicationEnd || '추후 공지'}</p>
+                      <p className="text-sm font-semibold text-blue-900">신청 마감일</p>
+                      <p className="text-sm text-blue-700">{event.applicationDeadline}</p>
                     </div>
                   </div>
                 )}
+                {/* 참가비 */}
+                {(event.paymentInfo?.cost || event.cost) && (
+                  <div className="flex items-start gap-3 p-3 bg-emerald-50 rounded-xl">
+                    <Wallet className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-900">참가비</p>
+                      <p className="text-sm text-emerald-700">{event.paymentInfo?.cost || event.cost}</p>
+                    </div>
+                  </div>
+                )}
+                {/* 예약금 */}
                 {event.depositAmount && (
                   <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl">
                     <CreditCard className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -742,24 +754,6 @@ const Events = () => {
                         <p className="text-xs text-amber-600 mt-0.5">잔금 마감: {event.balanceDeadline}</p>
                       )}
                     </div>
-                  </div>
-                )}
-                {event.guestApplicationStart && (
-                  <div className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl">
-                    <Users className="w-4 h-4 text-slate-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">비회원 모집</p>
-                      <p className="text-sm text-slate-600">
-                        {event.guestApplicationStart} ~ {event.guestApplicationEnd || '추후 공지'}
-                        <span className="text-xs text-slate-400 ml-1">(회원 미달 시)</span>
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {event.specialPaymentNote && (
-                  <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-xl">
-                    <Bell className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-purple-800">{event.specialPaymentNote}</p>
                   </div>
                 )}
                 {event.description && (

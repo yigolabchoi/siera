@@ -1235,58 +1235,6 @@ const EventManagement = () => {
                       </div>
                     </div>
 
-                    {/* 경비 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">회원 경비 (원)</label>
-                        <input
-                          type="number"
-                          value={formData.memberCost || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, memberCost: parseInt(e.target.value) || undefined }))}
-                          className="input-field"
-                          placeholder="1700000"
-                        />
-                        {formData.memberCost && (
-                          <p className="text-xs text-emerald-600 mt-1">{formData.memberCost.toLocaleString()}원</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">게스트 경비 (원)</label>
-                        <input
-                          type="number"
-                          value={formData.guestCost || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, guestCost: parseInt(e.target.value) || undefined }))}
-                          className="input-field"
-                          placeholder="1800000"
-                        />
-                        {formData.guestCost && (
-                          <p className="text-xs text-emerald-600 mt-1">{formData.guestCost.toLocaleString()}원</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* 회원 신청 기간 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">회원 신청 시작일</label>
-                        <input
-                          type="date"
-                          value={formData.memberApplicationStart || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, memberApplicationStart: e.target.value }))}
-                          className="input-field"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">회원 신청 마감일</label>
-                        <input
-                          type="date"
-                          value={formData.memberApplicationEnd || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, memberApplicationEnd: e.target.value }))}
-                          className="input-field"
-                        />
-                      </div>
-                    </div>
-
                     {/* 예약금 */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
@@ -1320,40 +1268,6 @@ const EventManagement = () => {
                           className="input-field"
                         />
                       </div>
-                    </div>
-
-                    {/* 비회원 모집 기간 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">비회원 모집 시작일 <span className="text-slate-400 font-normal">(선택)</span></label>
-                        <input
-                          type="date"
-                          value={formData.guestApplicationStart || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, guestApplicationStart: e.target.value }))}
-                          className="input-field"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-slate-700 font-medium mb-2 text-sm">비회원 모집 마감일</label>
-                        <input
-                          type="date"
-                          value={formData.guestApplicationEnd || ''}
-                          onChange={(e) => setFormData(prev => ({ ...prev, guestApplicationEnd: e.target.value }))}
-                          className="input-field"
-                        />
-                      </div>
-                    </div>
-
-                    {/* 입금 계좌 메모 */}
-                    <div>
-                      <label className="block text-slate-700 font-medium mb-2 text-sm">입금 계좌 안내</label>
-                      <textarea
-                        value={formData.specialPaymentNote || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, specialPaymentNote: e.target.value }))}
-                        className="input-field"
-                        rows={2}
-                        placeholder="예: 입금 계좌(시애라 계좌와 별도)는 추후 공지."
-                      />
                     </div>
 
                     {/* 일차별 일정 */}
