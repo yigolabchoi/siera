@@ -144,19 +144,36 @@ const Home = () => {
   
   const applicationClosed = useMemo(() => {
     if (!mainEvent) return false;
-    
+
     // 1순위: 이벤트 status 확인 (관리자가 설정한 상태)
     if (mainEvent.status === 'open') return false; // 접수중이면 신청 가능
     if (mainEvent.status === 'closed' || mainEvent.status === 'ongoing' || mainEvent.status === 'completed') return true; // 마감/진행중/완료면 신청 불가
-    
+
     // 2순위: 개발 모드 확인
     if (isDevMode) return applicationStatus === 'closed';
-    
+
     // 3순위: 날짜 기반 자동 마감 (draft 상태일 때만)
     if (mainEvent.status === 'draft') return isApplicationClosed(mainEvent.date, mainEvent.applicationDeadline);
-    
+
     return false;
   }, [isDevMode, applicationStatus, mainEvent]);
+
+  // 특별산행 신청 상태 — 실제 이벤트 status 기반
+  const specialEventClosed = useMemo(() => {
+    if (!specialEvent) return false;
+    if (specialEvent.status === 'open') return false;
+    if (['closed', 'ongoing', 'completed'].includes(specialEvent.status || '')) return true;
+    if (isDevMode) return specialApplicationStatus === 'closed';
+    if (specialEvent.applicationDeadline) return isApplicationClosed(specialEvent.date, specialEvent.applicationDeadline);
+    return false;
+  }, [specialEvent, isDevMode, specialApplicationStatus]);
+
+  const specialEventFull = useMemo(() => {
+    if (!specialEvent) return false;
+    if (isDevMode && specialApplicationStatus === 'full') return true;
+    return specialEvent.maxParticipants > 0 &&
+      (specialEvent.currentParticipants || 0) >= specialEvent.maxParticipants;
+  }, [specialEvent, isDevMode, specialApplicationStatus]);
   
   // 난이도별 배지
   const getDifficultyBadge = (difficulty: string) => {
@@ -291,55 +308,97 @@ const Home = () => {
           )}
           
           {/* 특별 산행 배너 - 정기산행 미정 시에도 표시 */}
-          {specialEvent && specialApplicationStatus !== 'no-event' && (
+          {specialEvent && (
             <div className="mb-8 md:mb-12">
               <Card className="border-l-4 border-l-amber-500 hover:shadow-lg transition-shadow bg-gradient-to-r from-amber-50/50 to-white">
                 <div className="p-6 md:p-8">
                   {/* 헤더 */}
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">⭐</span>
-                      <h3 className="text-xl md:text-2xl font-bold text-slate-900">특별 산행</h3>
-                      <Badge variant="warning">D-{Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}</Badge>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="text-2xl">{(specialEvent as any).specialType === 'overseas' ? '🌏' : '⭐'}</span>
+                      <h3 className="text-xl md:text-2xl font-bold text-slate-900">
+                        {(specialEvent as any).specialType === 'overseas' ? '해외 산행' : '특별 산행'}
+                      </h3>
+                      <Badge variant="warning">D-{Math.max(0, Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}</Badge>
                     </div>
-                    {/* 신청 상태 배지 */}
-                    {specialApplicationStatus === 'closed' && (
-                      <Badge variant="danger">신청 마감</Badge>
+                    <div className="flex items-center gap-2">
+                      {specialEventFull && <Badge variant="danger">정원 마감</Badge>}
+                      {!specialEventFull && specialEventClosed && <Badge variant="danger">신청 마감</Badge>}
+                      {!specialEventFull && !specialEventClosed && <Badge variant="success">신청 가능</Badge>}
+                    </div>
+                  </div>
+
+                  {/* 제목 */}
+                  <h4 className="text-xl md:text-2xl font-bold text-slate-900 mb-3">{specialEvent.title}</h4>
+
+                  {/* 핵심 정보 */}
+                  <div className="flex flex-wrap items-center gap-3 mb-4 text-sm text-slate-600">
+                    {specialEvent.mountain && (
+                      <div className="flex items-center gap-1.5">
+                        <Mountain className="w-4 h-4 flex-shrink-0" />
+                        <span>{specialEvent.mountain}{specialEvent.altitude ? ` ${specialEvent.altitude}` : ''}</span>
+                      </div>
                     )}
-                    {specialApplicationStatus === 'full' && (
-                      <Badge variant="danger">정원 마감</Badge>
+                    {specialEvent.location && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 flex-shrink-0" />
+                          <span>{specialEvent.location}</span>
+                        </div>
+                      </>
+                    )}
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 flex-shrink-0" />
+                      <span>
+                        {new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                        {(specialEvent as any).endDate && (
+                          <> ~ {new Date((specialEvent as any).endDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                            {(() => {
+                              const diff = Math.round((new Date((specialEvent as any).endDate).getTime() - new Date(specialEvent.date).getTime()) / (1000*60*60*24)) + 1;
+                              return ` (${diff-1}박${diff}일)`;
+                            })()}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {specialEvent.maxParticipants > 0 && (
+                      <>
+                        <span className="text-slate-300">|</span>
+                        <div className="flex items-center gap-1.5">
+                          <Users className="w-4 h-4 flex-shrink-0" />
+                          <span>{specialEvent.currentParticipants || 0} / {specialEvent.maxParticipants}명</span>
+                        </div>
+                      </>
                     )}
                   </div>
-                  
-                  {/* 제목 */}
-                  <h4 className="text-xl md:text-2xl font-bold text-slate-900 mb-4">{specialEvent.title}</h4>
-                  
-                  {/* 정보 */}
-                  <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <Mountain className="w-4 h-4" />
-                      <span>{specialEvent.mountain} {specialEvent.altitude}</span>
-                    </div>
-                    <span className="text-slate-300">|</span>
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4" />
-                      <span>{specialEvent.location}</span>
-                    </div>
-                    <span className="text-slate-300">|</span>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4" />
-                      <span>{new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</span>
-                    </div>
+
+                  {/* 참가비 + 마감일 */}
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    {(specialEvent.paymentInfo?.cost || specialEvent.cost) && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold">
+                        참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}
+                      </span>
+                    )}
+                    {specialEvent.applicationDeadline && (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">
+                        <TrendingUp className="w-3 h-3" />
+                        신청 마감 {specialEvent.applicationDeadline}
+                      </span>
+                    )}
                   </div>
 
                   {/* 설명 */}
-                  <p className="text-slate-600 mb-6 text-sm leading-relaxed">
-                    {specialEvent.description || '특별한 산행에 여러분을 초대합니다. 일반 정기 산행과는 다른 특별한 경험을 만나보세요.'}
-                  </p>
+                  {specialEvent.description && (
+                    <p className="text-slate-600 mb-5 text-sm leading-relaxed line-clamp-2">
+                      {specialEvent.description}
+                    </p>
+                  )}
 
                   {/* 버튼 */}
                   <div className="flex flex-col sm:flex-row gap-3">
-                    {specialApplicationStatus === 'open' ? (
+                    {(!specialEventClosed && !specialEventFull) ? (
                       <Link
                         to={`/home/events?eventId=${specialEvent.id}`}
                         className="flex-1 px-6 py-3 bg-amber-500 text-white rounded-lg font-semibold text-center hover:bg-amber-600 transition-colors"
@@ -351,7 +410,7 @@ const Home = () => {
                         disabled
                         className="flex-1 px-6 py-3 bg-slate-300 text-slate-500 rounded-lg font-semibold text-center cursor-not-allowed"
                       >
-                        {specialApplicationStatus === 'closed' ? '신청 마감' : '정원 마감'}
+                        {specialEventFull ? '정원 마감' : '신청 마감'}
                       </button>
                     )}
                     <Link
@@ -587,58 +646,95 @@ const Home = () => {
       </div>
       
       {/* 특별 산행 배너 - 심플한 디자인 */}
-      {specialEvent && specialApplicationStatus !== 'no-event' && (
+      {specialEvent && (
         <div className="mb-8 md:mb-12">
           <Card className="border-l-4 border-l-amber-500 hover:shadow-lg transition-shadow bg-gradient-to-r from-amber-50/50 to-white">
             <div className="p-6 md:p-8">
               {/* 헤더 */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">⭐</span>
-                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">특별 산행</h3>
+                  <span className="text-2xl">{specialEvent.specialType === 'overseas' ? '✈️' : '⭐'}</span>
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">
+                    {specialEvent.specialType === 'overseas' ? '해외 산행' : '특별 산행'}
+                  </h3>
                   <Badge variant="warning">D-{Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))}</Badge>
                 </div>
                 {/* 신청 상태 배지 */}
-                {specialApplicationStatus === 'closed' && (
-                  <Badge variant="danger">신청 마감</Badge>
-                )}
-                {specialApplicationStatus === 'full' && (
+                {specialEventFull ? (
                   <Badge variant="danger">정원 마감</Badge>
-                )}
-                {(specialApplicationStatus as any) === 'no-event' && (
-                  <Badge variant="default">산행 미정</Badge>
+                ) : specialEventClosed ? (
+                  <Badge variant="danger">신청 마감</Badge>
+                ) : (
+                  <Badge variant="success">신청 가능</Badge>
                 )}
               </div>
-              
+
               {/* 제목 */}
               <h4 className="text-xl md:text-2xl font-bold text-slate-900 mb-4">{specialEvent.title}</h4>
-              
+
               {/* 정보 */}
               <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-slate-600">
                 <div className="flex items-center gap-1.5">
                   <Mountain className="w-4 h-4" />
-                  <span>{specialEvent.mountain} {specialEvent.altitude}</span>
+                  <span>{specialEvent.mountain}{specialEvent.altitude ? ` ${specialEvent.altitude}` : ''}</span>
                 </div>
-                <span className="text-slate-300">|</span>
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4" />
-                  <span>{specialEvent.location}</span>
-                </div>
+                {specialEvent.location && (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-4 h-4" />
+                      <span>{specialEvent.location}</span>
+                    </div>
+                  </>
+                )}
                 <span className="text-slate-300">|</span>
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4" />
-                  <span>{new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</span>
+                  <span>
+                    {new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                    {specialEvent.endDate && specialEvent.endDate !== specialEvent.date && (
+                      <> ~ {new Date(specialEvent.endDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}</>
+                    )}
+                  </span>
                 </div>
+                {(specialEvent.paymentInfo?.cost || (specialEvent as any).cost) && (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-amber-600">
+                        참가비 {specialEvent.paymentInfo?.cost || (specialEvent as any).cost}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {specialEvent.maxParticipants > 0 && (
+                  <>
+                    <span className="text-slate-300">|</span>
+                    <div className="flex items-center gap-1.5">
+                      <Users className="w-4 h-4" />
+                      <span>{specialEvent.currentParticipants || 0}/{specialEvent.maxParticipants}명</span>
+                    </div>
+                  </>
+                )}
               </div>
-              
+
+              {specialEvent.applicationDeadline && (
+                <div className="mb-4 text-sm text-slate-500 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  <span>신청 마감: {formatDeadline(specialEvent.applicationDeadline)}</span>
+                </div>
+              )}
+
               {/* 설명 */}
-              <p className="text-slate-600 mb-6 text-sm leading-relaxed">
-                {specialEvent.description || '특별한 산행에 여러분을 초대합니다. 일반 정기 산행과는 다른 특별한 경험을 만나보세요.'}
-              </p>
-              
+              {specialEvent.description && (
+                <p className="text-slate-600 mb-6 text-sm leading-relaxed">
+                  {specialEvent.description}
+                </p>
+              )}
+
               {/* 버튼 */}
               <div className="flex flex-col sm:flex-row gap-3">
-                {specialApplicationStatus === 'open' ? (
+                {(!specialEventClosed && !specialEventFull) ? (
                   <Link
                     to={`/home/events?eventId=${specialEvent.id}`}
                     className="flex-1 px-6 py-3 bg-amber-500 text-white rounded-lg font-semibold text-center hover:bg-amber-600 transition-colors"
@@ -650,8 +746,7 @@ const Home = () => {
                     disabled
                     className="flex-1 px-6 py-3 bg-slate-300 text-slate-500 rounded-lg font-semibold text-center cursor-not-allowed"
                   >
-                    {specialApplicationStatus === 'closed' ? '신청 마감' :
-                     specialApplicationStatus === 'full' ? '정원 마감' : '산행 미정'}
+                    {specialEventFull ? '정원 마감' : '신청 마감'}
                   </button>
                 )}
                 <Link
