@@ -212,40 +212,125 @@ const Home = () => {
         </div>
       ) : !mainEvent ? (
         <div>
-          {/* Hero Section with Background Image */}
-          <div className="relative h-[350px] sm:h-[400px] md:h-[500px] rounded-xl md:rounded-2xl overflow-hidden mb-8 md:mb-12 shadow-xl">
-            <img 
-              src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&h=500&fit=crop" 
-              alt="Mountain" 
+          {/* Hero Section - 특별산행 있으면 특별산행 히어로, 없으면 준비중 */}
+          <div className="relative h-[420px] sm:h-[480px] md:h-[560px] rounded-xl md:rounded-2xl overflow-hidden mb-8 md:mb-12 shadow-xl">
+            <img
+              src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&h=600&fit=crop"
+              alt="Mountain"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/50 to-black/30" />
-            
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-6">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center mb-4 sm:mb-6 border border-white/20">
-                <CalendarX className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+            <div className={`absolute inset-0 ${specialEvent ? 'bg-gradient-to-t from-black/80 via-black/50 to-black/20' : 'bg-gradient-to-t from-black/70 via-black/50 to-black/30'}`} />
+
+            {specialEvent ? (
+              /* 특별산행 히어로 */
+              <div className="absolute inset-0 flex flex-col justify-end px-4 sm:px-8 md:px-12 pb-8 sm:pb-10 md:pb-14">
+                {/* 배지 */}
+                <div className="flex items-center gap-2 mb-3 sm:mb-4 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/90 backdrop-blur-md rounded-full text-white text-xs sm:text-sm font-bold border border-amber-400/30">
+                    <span>{(specialEvent as any).specialType === 'overseas' ? '✈️' : '⭐'}</span>
+                    <span>{(specialEvent as any).specialType === 'overseas' ? '해외 산행' : '특별 산행'}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-full text-white text-xs sm:text-sm font-semibold border border-white/20">
+                    <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+                    D-{Math.max(0, Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}
+                  </span>
+                  {specialEventFull ? (
+                    <span className="px-3 py-1.5 bg-red-500/90 rounded-full text-white text-xs font-bold">정원 마감</span>
+                  ) : specialEventClosed ? (
+                    <span className="px-3 py-1.5 bg-red-500/90 rounded-full text-white text-xs font-bold">신청 마감</span>
+                  ) : (
+                    <span className="px-3 py-1.5 bg-green-500/90 rounded-full text-white text-xs font-bold">신청 가능</span>
+                  )}
+                </div>
+
+                {/* 제목 */}
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-2 sm:mb-3 tracking-tight drop-shadow-lg">
+                  {specialEvent.mountain || specialEvent.title}
+                </h1>
+
+                {/* 부제목 */}
+                <p className="text-base sm:text-lg md:text-xl text-white/90 font-semibold mb-1 sm:mb-2">
+                  {specialEvent.title}
+                </p>
+
+                {/* 정보 라인 */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm sm:text-base text-white/80 mb-4 sm:mb-6">
+                  {specialEvent.location && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      {specialEvent.location}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                    {(specialEvent as any).endDate && ` ~ ${new Date((specialEvent as any).endDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}`}
+                  </span>
+                  {(specialEvent.paymentInfo?.cost || specialEvent.cost) && (
+                    <span className="flex items-center gap-1 text-amber-300 font-semibold">
+                      참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}
+                    </span>
+                  )}
+                  {specialEvent.maxParticipants > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Users className="w-4 h-4" />
+                      {specialEvent.currentParticipants || 0}/{specialEvent.maxParticipants}명
+                    </span>
+                  )}
+                </div>
+
+                {/* 버튼 */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  {(!specialEventClosed && !specialEventFull) ? (
+                    <Link
+                      to={`/home/events?eventId=${specialEvent.id}`}
+                      className="px-8 py-3 sm:py-4 bg-amber-500 text-white rounded-xl font-bold text-center hover:bg-amber-400 transition-colors shadow-lg text-sm sm:text-base"
+                    >
+                      신청하기
+                    </Link>
+                  ) : (
+                    <button
+                      disabled
+                      className="px-8 py-3 sm:py-4 bg-slate-500/80 text-white/70 rounded-xl font-bold cursor-not-allowed text-sm sm:text-base"
+                    >
+                      {specialEventFull ? '정원 마감' : '신청 마감'}
+                    </button>
+                  )}
+                  <Link
+                    to={`/home/events?eventId=${specialEvent.id}`}
+                    className="px-8 py-3 sm:py-4 bg-white/10 backdrop-blur-md text-white border border-white/30 rounded-xl font-semibold text-center hover:bg-white/20 transition-colors text-sm sm:text-base"
+                  >
+                    자세히 보기
+                  </Link>
+                </div>
               </div>
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2 sm:mb-3 text-center">다음 산행 일정 준비 중</h2>
-            <p className="text-white/90 text-sm sm:text-base md:text-lg mb-6 sm:mb-8 max-w-md text-center px-4">
-              이번 달 정기 산행이 완료되었습니다.<br />
-              다음 산행 일정은 곧 공지될 예정입니다.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full max-w-md px-4">
-              <Link 
-                to="/home/gallery"
-                className="flex-1 px-6 sm:px-8 py-3 sm:py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30 text-center text-sm sm:text-base"
-              >
-                사진 갤러리 보기
-              </Link>
-              <Link 
-                to="/home/hiking-history"
-                className="flex-1 px-6 sm:px-8 py-3 sm:py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30 text-center text-sm sm:text-base"
-              >
-                이전 산행 보기
-              </Link>
-            </div>
-            </div>
+            ) : (
+              /* 정기산행 준비중 히어로 */
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-6">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center mb-4 sm:mb-6 border border-white/20">
+                  <CalendarX className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+                </div>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-2 sm:mb-3 text-center">다음 산행 일정 준비 중</h2>
+                <p className="text-white/90 text-sm sm:text-base md:text-lg mb-6 sm:mb-8 max-w-md text-center px-4">
+                  이번 달 정기 산행이 완료되었습니다.<br />
+                  다음 산행 일정은 곧 공지될 예정입니다.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full max-w-md px-4">
+                  <Link
+                    to="/home/gallery"
+                    className="flex-1 px-6 sm:px-8 py-3 sm:py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30 text-center text-sm sm:text-base"
+                  >
+                    사진 갤러리 보기
+                  </Link>
+                  <Link
+                    to="/home/hiking-history"
+                    className="flex-1 px-6 sm:px-8 py-3 sm:py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30 text-center text-sm sm:text-base"
+                  >
+                    이전 산행 보기
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 이달의 시 섹션 */}
@@ -307,123 +392,6 @@ const Home = () => {
             </div>
           )}
           
-          {/* 특별 산행 배너 - 정기산행 미정 시에도 표시 */}
-          {specialEvent && (
-            <div className="mb-8 md:mb-12">
-              <Card className="border-l-4 border-l-amber-500 hover:shadow-lg transition-shadow bg-gradient-to-r from-amber-50/50 to-white">
-                <div className="p-6 md:p-8">
-                  {/* 헤더 */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-2xl">{(specialEvent as any).specialType === 'overseas' ? '🌏' : '⭐'}</span>
-                      <h3 className="text-xl md:text-2xl font-bold text-slate-900">
-                        {(specialEvent as any).specialType === 'overseas' ? '해외 산행' : '특별 산행'}
-                      </h3>
-                      <Badge variant="warning">D-{Math.max(0, Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}</Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {specialEventFull && <Badge variant="danger">정원 마감</Badge>}
-                      {!specialEventFull && specialEventClosed && <Badge variant="danger">신청 마감</Badge>}
-                      {!specialEventFull && !specialEventClosed && <Badge variant="success">신청 가능</Badge>}
-                    </div>
-                  </div>
-
-                  {/* 제목 */}
-                  <h4 className="text-xl md:text-2xl font-bold text-slate-900 mb-3">{specialEvent.title}</h4>
-
-                  {/* 핵심 정보 */}
-                  <div className="flex flex-wrap items-center gap-3 mb-4 text-sm text-slate-600">
-                    {specialEvent.mountain && (
-                      <div className="flex items-center gap-1.5">
-                        <Mountain className="w-4 h-4 flex-shrink-0" />
-                        <span>{specialEvent.mountain}{specialEvent.altitude ? ` ${specialEvent.altitude}` : ''}</span>
-                      </div>
-                    )}
-                    {specialEvent.location && (
-                      <>
-                        <span className="text-slate-300">|</span>
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-4 h-4 flex-shrink-0" />
-                          <span>{specialEvent.location}</span>
-                        </div>
-                      </>
-                    )}
-                    <span className="text-slate-300">|</span>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 flex-shrink-0" />
-                      <span>
-                        {new Date(specialEvent.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
-                        {(specialEvent as any).endDate && (
-                          <> ~ {new Date((specialEvent as any).endDate).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
-                            {(() => {
-                              const diff = Math.round((new Date((specialEvent as any).endDate).getTime() - new Date(specialEvent.date).getTime()) / (1000*60*60*24)) + 1;
-                              return ` (${diff-1}박${diff}일)`;
-                            })()}
-                          </>
-                        )}
-                      </span>
-                    </div>
-                    {specialEvent.maxParticipants > 0 && (
-                      <>
-                        <span className="text-slate-300">|</span>
-                        <div className="flex items-center gap-1.5">
-                          <Users className="w-4 h-4 flex-shrink-0" />
-                          <span>{specialEvent.currentParticipants || 0} / {specialEvent.maxParticipants}명</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* 참가비 + 마감일 */}
-                  <div className="flex flex-wrap gap-3 mb-4">
-                    {(specialEvent.paymentInfo?.cost || specialEvent.cost) && (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-semibold">
-                        참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}
-                      </span>
-                    )}
-                    {specialEvent.applicationDeadline && (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-sm">
-                        <TrendingUp className="w-3 h-3" />
-                        신청 마감 {specialEvent.applicationDeadline}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 설명 */}
-                  {specialEvent.description && (
-                    <p className="text-slate-600 mb-5 text-sm leading-relaxed line-clamp-2">
-                      {specialEvent.description}
-                    </p>
-                  )}
-
-                  {/* 버튼 */}
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {(!specialEventClosed && !specialEventFull) ? (
-                      <Link
-                        to={`/home/events?eventId=${specialEvent.id}`}
-                        className="flex-1 px-6 py-3 bg-amber-500 text-white rounded-lg font-semibold text-center hover:bg-amber-600 transition-colors"
-                      >
-                        신청하기
-                      </Link>
-                    ) : (
-                      <button
-                        disabled
-                        className="flex-1 px-6 py-3 bg-slate-300 text-slate-500 rounded-lg font-semibold text-center cursor-not-allowed"
-                      >
-                        {specialEventFull ? '정원 마감' : '신청 마감'}
-                      </button>
-                    )}
-                    <Link
-                      to={`/home/events?eventId=${specialEvent.id}`}
-                      className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-lg font-semibold text-center hover:bg-slate-50 transition-colors"
-                    >
-                      자세히 보기
-                    </Link>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
         </div>
       ) : (
         <div>
