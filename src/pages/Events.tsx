@@ -443,14 +443,53 @@ const Events = () => {
       {/* 산행 미정 상태 */}
       {(isDevMode && applicationStatus === 'no-event') || !event ? (
         <div>
+          {/* 특별산행이 있으면 특별산행을 메인 히어로로 표시 */}
+          {specialEvent ? (
+            <Link
+              to={`/home/events?eventId=${specialEvent.id}`}
+              className="block mb-8"
+            >
+              <div className="relative overflow-hidden rounded-2xl shadow-xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+                <div className="relative p-6 sm:p-8 md:p-12">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-amber-900 rounded-full text-sm font-bold">
+                      {specialEvent.specialType === 'overseas' ? <><Globe className="w-4 h-4" />해외산행</> : <><Star className="w-4 h-4" />특별산행</>}
+                    </span>
+                    <span className="text-purple-300 text-sm font-medium">제{specialEvent.eventNumber}차</span>
+                    <span className="ml-auto px-3 py-1 bg-white/10 text-white text-xs rounded-full font-semibold">
+                      D-{Math.max(0, Math.ceil((new Date(specialEvent.date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))}
+                    </span>
+                  </div>
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2">
+                    {specialEvent.mountain || specialEvent.title}
+                  </h2>
+                  <p className="text-purple-200 text-lg mb-4">{specialEvent.title}</p>
+                  <div className="flex flex-wrap gap-4 text-purple-200 text-sm mb-6">
+                    <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" />{specialEvent.date}{specialEvent.endDate ? ` ~ ${specialEvent.endDate}` : ''}</span>
+                    {specialEvent.location && <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" />{specialEvent.location}</span>}
+                    {(specialEvent.paymentInfo?.cost || specialEvent.cost) && <span className="flex items-center gap-1.5 text-amber-300 font-semibold">참가비 {specialEvent.paymentInfo?.cost || specialEvent.cost}</span>}
+                    {specialEvent.maxParticipants > 0 && <span className="flex items-center gap-1.5"><Users className="w-4 h-4" />정원 {specialEvent.maxParticipants}명</span>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="px-6 py-3 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-400 transition-colors">
+                      신청하기 →
+                    </span>
+                    <span className="text-purple-300 text-sm">자세히 보기</span>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          ) : (
           <div className="relative h-[400px] md:h-[500px] rounded-2xl overflow-hidden mb-12 shadow-xl">
-            <img 
-              src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&h=500&fit=crop" 
-              alt="Mountain" 
+            <img
+              src="https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1600&h=500&fit=crop"
+              alt="Mountain"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/50 to-black/30" />
-            
+
             <div className="absolute inset-0 flex flex-col items-center justify-center px-6">
               <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center mb-6 border border-white/20">
                 <CalendarX className="w-10 h-10 text-white" />
@@ -460,15 +499,15 @@ const Events = () => {
                 이번 달 정기 산행이 완료되었습니다.<br />
                 다음 산행 일정은 곧 공지될 예정입니다.
               </p>
-              
+
               <div className="flex gap-4">
-                <Link 
+                <Link
                   to="/home/gallery"
                   className="px-8 py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30"
                 >
                   사진 갤러리 보기
                 </Link>
-                <Link 
+                <Link
                   to="/home/hiking-history"
                   className="px-8 py-4 bg-white/20 backdrop-blur-md text-white rounded-xl font-bold hover:bg-white/30 transition-colors border border-white/30"
                 >
@@ -477,6 +516,7 @@ const Events = () => {
               </div>
             </div>
           </div>
+          )}
 
           {/* 이달의 시 섹션 */}
           {currentPoem && (
