@@ -659,81 +659,91 @@ const Events = () => {
 
       {/* ── 특별산행 상세 뷰 ── */}
       {isSpecialEvent && event && (
-        <div className="mb-8 sm:mb-12">
+        <div className="space-y-5 mb-10">
 
           {/* 헤더 배너 */}
-          <div className="relative overflow-hidden rounded-2xl shadow-xl bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900 mb-6">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl" />
+          <div className="relative overflow-hidden rounded-2xl shadow-lg bg-gradient-to-br from-purple-900 via-indigo-900 to-slate-900">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
             {event.imageUrl && (
-              <img src={event.imageUrl} alt={event.title} className="absolute inset-0 w-full h-full object-cover opacity-20" />
+              <img src={event.imageUrl} alt={event.title} className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none" />
             )}
-            <div className="relative p-6 sm:p-8 md:p-10">
+            <div className="relative p-6 sm:p-8">
               {/* 뒤로 가기 + 뱃지 */}
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-4">
                 {currentEvent ? (
                   <Link to="/home/events" className="flex items-center gap-1.5 text-purple-300 hover:text-white transition-colors text-sm">
-                    <ChevronLeft className="w-4 h-4" />정기산행으로 돌아가기
+                    <ChevronLeft className="w-4 h-4" />정기산행으로
                   </Link>
                 ) : <div />}
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 text-amber-900 rounded-full text-sm font-bold">
-                  {event.specialType === 'overseas' ? <><Globe className="w-3.5 h-3.5" />해외산행</> : <><Star className="w-3.5 h-3.5" />특별산행</>}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400 text-amber-900 rounded-full text-xs font-bold">
+                  {event.specialType === 'overseas' ? <><Globe className="w-3 h-3" />해외산행</> : <><Star className="w-3 h-3" />특별산행</>}
                 </span>
               </div>
 
-              {/* 이벤트 번호 */}
+              {/* 이벤트 번호 + 제목 */}
               {event.eventNumber && (
-                <p className="text-purple-300 text-sm font-medium mb-1">제{event.eventNumber}차 특별산행</p>
+                <p className="text-purple-400 text-xs font-medium mb-1">제{event.eventNumber}차 특별산행</p>
+              )}
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-1 leading-tight">
+                {event.mountain || event.title}
+              </h1>
+              {event.mountain && event.title !== event.mountain && (
+                <p className="text-purple-200 text-sm mb-3">{event.title}</p>
               )}
 
-              {/* 제목 */}
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-2">{event.mountain || event.title}</h1>
-              {event.mountain && event.title !== event.mountain && (
-                <p className="text-purple-200 text-lg mb-3">{event.title}</p>
-              )}
-              <div className="flex flex-wrap items-center gap-3 mb-6">
-                {event.location && <span className="flex items-center gap-1.5 text-purple-200 text-sm"><MapPin className="w-4 h-4" />{event.location}</span>}
-                {event.altitude && <span className="flex items-center gap-1.5 text-purple-200 text-sm"><TrendingUp className="w-4 h-4" />{event.altitude}</span>}
+              {/* 태그 */}
+              <div className="flex flex-wrap items-center gap-2 mb-5">
+                {event.location && (
+                  <span className="flex items-center gap-1 text-purple-200 text-xs bg-white/10 px-2.5 py-1 rounded-full">
+                    <MapPin className="w-3 h-3" />{event.location}
+                  </span>
+                )}
+                {event.altitude && (
+                  <span className="flex items-center gap-1 text-purple-200 text-xs bg-white/10 px-2.5 py-1 rounded-full">
+                    <TrendingUp className="w-3 h-3" />{event.altitude}
+                  </span>
+                )}
                 {event.difficulty && (
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    event.difficulty === '상' || event.difficulty === '중상' ? 'bg-red-500/20 text-red-200' :
-                    event.difficulty === '중' ? 'bg-amber-500/20 text-amber-200' :
-                    'bg-emerald-500/20 text-emerald-200'
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                    event.difficulty === '상' || event.difficulty === '중상' ? 'bg-red-500/25 text-red-200' :
+                    event.difficulty === '중' ? 'bg-amber-500/25 text-amber-200' :
+                    'bg-emerald-500/25 text-emerald-200'
                   }`}>난이도 {event.difficulty}</span>
                 )}
               </div>
 
               {/* 핵심 정보 그리드 */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                  <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" />날짜</p>
-                  <p className="text-white font-bold text-sm">
+                  <p className="text-purple-300 text-[10px] font-medium mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" />날짜</p>
+                  <p className="text-white font-bold text-sm leading-snug">
                     {event.date}
-                    {event.endDate && <><br /><span className="text-purple-200 text-xs">~ {event.endDate}</span></>}
+                    {event.endDate && <span className="text-purple-200 text-xs block">~ {event.endDate}</span>}
                     {event.endDate && (() => {
                       const diff = Math.round((new Date(event.endDate!).getTime() - new Date(event.date).getTime()) / 86400000) + 1;
-                      return <span className="text-amber-300 text-xs ml-1 block">{diff-1}박{diff}일</span>;
+                      return <span className="text-amber-300 text-[11px] block">{diff-1}박{diff}일</span>;
                     })()}
                   </p>
                 </div>
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                  <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Users className="w-3 h-3" />신청 현황</p>
+                  <p className="text-purple-300 text-[10px] font-medium mb-1 flex items-center gap-1"><Users className="w-3 h-3" />신청 현황</p>
                   <p className="text-white font-bold text-sm">{event.currentParticipants || 0}명 신청</p>
                 </div>
                 {event.memberCost != null ? (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />회원 경비</p>
+                    <p className="text-purple-300 text-[10px] font-medium mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />회원 경비</p>
                     <p className="text-white font-bold text-sm">{event.memberCost.toLocaleString()}원</p>
                   </div>
                 ) : (event.paymentInfo?.cost || event.cost) ? (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />참가비</p>
+                    <p className="text-purple-300 text-[10px] font-medium mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" />참가비</p>
                     <p className="text-white font-bold text-sm">{event.paymentInfo?.cost || event.cost}</p>
                   </div>
                 ) : null}
                 {event.applicationDeadline && (
                   <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3">
-                    <p className="text-purple-300 text-xs mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />신청 마감</p>
+                    <p className="text-purple-300 text-[10px] font-medium mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />신청 마감</p>
                     <p className="text-white font-bold text-sm">{event.applicationDeadline.split('T')[0]}</p>
                   </div>
                 )}
@@ -742,10 +752,10 @@ const Events = () => {
           </div>
 
           {/* 메인 콘텐츠 + 사이드바 */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
             {/* 왼쪽: 산행 상세 정보 */}
-            <div className="lg:col-span-2 space-y-5">
+            <div className="lg:col-span-2 space-y-4">
 
               {/* 산행 소개 */}
               {event.description && (
@@ -1010,38 +1020,50 @@ const Events = () => {
                   )}
                 </div>
 
-                {/* 신청자 요약 */}
-                {participants.length > 0 && (
-                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <h3 className="font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
-                      <UserCheck className="w-4 h-4 text-purple-600" />신청자 {participants.length}명
-                    </h3>
-                    <div className="flex flex-wrap gap-1.5">
-                      {participants.slice(0, 12).map((p, idx) => (
-                        <div key={p.id || idx} title={`${p.name}${p.company ? ` (${p.company})` : ''}`}
-                          className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white shadow-sm">
+                {/* 신청자 요약 — 클릭 시 모달 */}
+                <button
+                  onClick={handleOpenParticipantsModal}
+                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left hover:border-purple-300 hover:shadow-md transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-purple-600" />
+                      신청자 현황
+                    </span>
+                    <span className="text-xs text-purple-600 font-semibold group-hover:text-purple-800 flex items-center gap-1">
+                      보기 <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex -space-x-2">
+                      {participants.slice(0, 8).map((p, idx) => (
+                        <div key={p.id || idx}
+                          className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white shadow-sm">
                           {p.profileImage ? (
                             <img src={p.profileImage} alt={p.name} className="w-full h-full object-cover" />
                           ) : (
-                            <span className="text-purple-600 text-xs font-bold">{p.name.charAt(0)}</span>
+                            <span className="text-purple-600 text-[10px] font-bold">{p.name.charAt(0)}</span>
                           )}
                         </div>
                       ))}
-                      {participants.length > 12 && (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs text-slate-600 font-semibold">
-                          +{participants.length - 12}
+                      {participants.length > 8 && (
+                        <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600 font-semibold border-2 border-white">
+                          +{participants.length - 8}
                         </div>
                       )}
                     </div>
+                    <span className="text-sm text-slate-500 ml-1">
+                      {participants.length > 0 ? `${participants.length}명 신청` : '아직 신청자가 없습니다'}
+                    </span>
                   </div>
-                )}
+                </button>
               </div>
             </div>
           </div>
 
           {/* 일차별 상세 일정 */}
           {event.dailySchedule && event.dailySchedule.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
               <h3 className="font-bold text-slate-900 text-base mb-5 flex items-center gap-2">
                 <Plane className="w-5 h-5 text-purple-600" />상세 일정
               </h3>
@@ -1073,7 +1095,7 @@ const Events = () => {
 
           {/* 정기 일정 (schedule) */}
           {event.schedule && event.schedule.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
               <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
                 <Clock className="w-5 h-5 text-purple-600" />산행 일정
               </h3>
@@ -1088,38 +1110,10 @@ const Events = () => {
             </div>
           )}
 
-          {/* 신청자 목록 */}
-          {participants.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
-              <h3 className="font-bold text-slate-900 text-base mb-4 flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-purple-600" />신청자 목록 ({participants.length}명)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {participants.map((p, idx) => (
-                  <div key={p.id || idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
-                    <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      {p.profileImage ? (
-                        <img src={p.profileImage} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-purple-600 text-xs font-bold">{p.name.charAt(0)}</span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-900 truncate">{p.name}</p>
-                      {(p.company || p.position) && (
-                        <p className="text-xs text-slate-500 truncate">{[p.company, p.position].filter(Boolean).join(' · ')}</p>
-                      )}
-                    </div>
-                    {p.isGuest && <span className="text-xs px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded ml-auto flex-shrink-0">게스트</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* 답사 사진 */}
           {event.surveyPhotos && event.surveyPhotos.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Camera className="w-5 h-5 text-purple-600" />
                 <h3 className="font-bold text-slate-900 text-base">답사 사진</h3>
