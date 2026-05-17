@@ -904,7 +904,7 @@ const Events = () => {
                         </div>
                         <div className="p-4">
                           {course.description && <p className="text-sm text-slate-600 mb-3">{course.description}</p>}
-                          <div className="flex flex-wrap gap-4">
+                          <div className="flex flex-wrap gap-4 mb-3">
                             {course.distance && (
                               <div>
                                 <p className="text-xs text-slate-500">거리</p>
@@ -918,6 +918,20 @@ const Events = () => {
                               </div>
                             )}
                           </div>
+                          {/* 코스 당일 동선 */}
+                          {course.schedule && course.schedule.length > 0 && (
+                            <div className="border-t border-slate-100 pt-3 mt-1">
+                              <p className="text-xs font-semibold text-slate-500 mb-2">당일 동선</p>
+                              <div className="space-y-1.5">
+                                {course.schedule.map((s, si) => (
+                                  <div key={si} className="flex gap-3 text-sm">
+                                    <span className="font-mono text-purple-600 font-semibold w-14 flex-shrink-0 text-xs">{s.time}</span>
+                                    <span className="text-slate-700 text-xs">{s.location}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1098,6 +1112,36 @@ const Events = () => {
                     </div>
                     {p.isGuest && <span className="text-xs px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded ml-auto flex-shrink-0">게스트</span>}
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 답사 사진 */}
+          {event.surveyPhotos && event.surveyPhotos.length > 0 && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Camera className="w-5 h-5 text-purple-600" />
+                <h3 className="font-bold text-slate-900 text-base">답사 사진</h3>
+                <span className="text-xs text-slate-500 ml-1">({event.surveyPhotos.length}장)</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {event.surveyPhotos.map((url, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => openLightbox(idx)}
+                    className="relative aspect-square rounded-xl overflow-hidden group cursor-pointer bg-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                  >
+                    <img
+                      src={url}
+                      alt={`답사 사진 ${idx + 1}`}
+                      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+                      <ZoomIn className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                    </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -1537,62 +1581,6 @@ const Events = () => {
           </div>
           
           {/* 답사 사진은 참가자 현황 위 슬라이드로 이동 */}
-
-          {/* 답사 사진 라이트박스 */}
-          {lightboxOpen && event.surveyPhotos && event.surveyPhotos.length > 0 && (
-            <div
-              className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center"
-              onClick={closeLightbox}
-            >
-              {/* 닫기 버튼 */}
-              <button
-                onClick={closeLightbox}
-                className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              {/* 사진 카운터 */}
-              <div className="absolute top-4 left-4 z-10 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-medium">
-                {lightboxIndex + 1} / {event.surveyPhotos.length}
-              </div>
-
-              {/* 이전 버튼 */}
-              {event.surveyPhotos.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLightboxIndex((prev) => (prev - 1 + event.surveyPhotos!.length) % event.surveyPhotos!.length);
-                  }}
-                  className="absolute left-2 sm:left-4 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </button>
-              )}
-
-              {/* 다음 버튼 */}
-              {event.surveyPhotos.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setLightboxIndex((prev) => (prev + 1) % event.surveyPhotos!.length);
-                  }}
-                  className="absolute right-2 sm:right-4 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors"
-                >
-                  <ChevronRight className="w-6 h-6" />
-                </button>
-              )}
-
-              {/* 메인 이미지 */}
-              <img
-                src={event.surveyPhotos[lightboxIndex]}
-                alt={`답사 사진 ${lightboxIndex + 1}`}
-                className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg select-none"
-                onClick={(e) => e.stopPropagation()}
-                draggable={false}
-              />
-            </div>
-          )}
 
           {/* Courses Section */}
           {event.courses && event.courses.length > 0 && (
@@ -2158,6 +2146,33 @@ const Events = () => {
         </div>
       )}
       
+      {/* 답사 사진 라이트박스 (특별산행·정기산행 공용) */}
+      {lightboxOpen && event && event.surveyPhotos && event.surveyPhotos.length > 0 && (
+        <div className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center" onClick={closeLightbox}>
+          <button onClick={closeLightbox} className="absolute top-4 right-4 z-10 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors">
+            <X className="w-6 h-6" />
+          </button>
+          <div className="absolute top-4 left-4 z-10 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-medium">
+            {lightboxIndex + 1} / {event.surveyPhotos.length}
+          </div>
+          {event.surveyPhotos.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setLightboxIndex((prev) => (prev - 1 + event.surveyPhotos!.length) % event.surveyPhotos!.length); }}
+              className="absolute left-2 sm:left-4 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors">
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
+          {event.surveyPhotos.length > 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setLightboxIndex((prev) => (prev + 1) % event.surveyPhotos!.length); }}
+              className="absolute right-2 sm:right-4 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white hover:bg-white/30 transition-colors">
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
+          <img src={event.surveyPhotos[lightboxIndex]} alt={`답사 사진 ${lightboxIndex + 1}`}
+            className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg select-none"
+            onClick={(e) => e.stopPropagation()} draggable={false} />
+        </div>
+      )}
+
       {/* 입금 정보 모달 */}
       {showPaymentModal && event.paymentInfo && (
         <div
