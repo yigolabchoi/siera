@@ -1020,24 +1020,30 @@ const Events = () => {
                   )}
                 </div>
 
-                {/* 신청자 요약 — 클릭 시 모달 */}
-                <button
-                  onClick={handleOpenParticipantsModal}
-                  className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-left hover:border-purple-300 hover:shadow-md transition-all group"
-                >
+                {/* 신청자 현황 — 더보기 클릭 시 모달 */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-semibold text-slate-900 text-sm flex items-center gap-2">
-                      <UserCheck className="w-4 h-4 text-purple-600" />
-                      신청자 현황
+                    <span className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-purple-600" />신청자
                     </span>
-                    <span className="text-xs text-purple-600 font-semibold group-hover:text-purple-800 flex items-center gap-1">
-                      보기 <ChevronRight className="w-3.5 h-3.5" />
-                    </span>
+                    <button
+                      onClick={handleOpenParticipantsModal}
+                      className="flex items-center gap-1 text-xs font-semibold text-purple-600 hover:text-purple-800 transition-colors px-2.5 py-1 rounded-lg hover:bg-purple-50"
+                    >
+                      더보기 <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex -space-x-2">
-                      {participants.slice(0, 8).map((p, idx) => (
+                  {/* 신청자 수 강조 */}
+                  <div className="flex items-end gap-1.5 mb-3">
+                    <span className="text-3xl font-bold text-slate-900">{participants.length}</span>
+                    <span className="text-sm text-slate-500 mb-1">명 신청</span>
+                  </div>
+                  {/* 아바타 미리보기 */}
+                  {participants.length > 0 && (
+                    <div className="flex -space-x-1.5">
+                      {participants.slice(0, 10).map((p, idx) => (
                         <div key={p.id || idx}
+                          title={p.name}
                           className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0 overflow-hidden border-2 border-white shadow-sm">
                           {p.profileImage ? (
                             <img src={p.profileImage} alt={p.name} className="w-full h-full object-cover" />
@@ -1046,17 +1052,17 @@ const Events = () => {
                           )}
                         </div>
                       ))}
-                      {participants.length > 8 && (
-                        <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600 font-semibold border-2 border-white">
-                          +{participants.length - 8}
+                      {participants.length > 10 && (
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-semibold border-2 border-white">
+                          +{participants.length - 10}
                         </div>
                       )}
                     </div>
-                    <span className="text-sm text-slate-500 ml-1">
-                      {participants.length > 0 ? `${participants.length}명 신청` : '아직 신청자가 없습니다'}
-                    </span>
-                  </div>
-                </button>
+                  )}
+                  {participants.length === 0 && (
+                    <p className="text-xs text-slate-400">아직 신청자가 없습니다</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1808,122 +1814,6 @@ const Events = () => {
         </div>
       )}
       
-      {/* Participants Modal */}
-      {showParticipantsModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center"
-          onClick={() => setShowParticipantsModal(false)}
-        >
-          <div 
-            className="bg-white w-full sm:max-w-2xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 모바일 드래그 핸들 */}
-            <div className="sm:hidden flex justify-center pt-2 pb-1">
-              <div className="w-10 h-1 bg-slate-300 rounded-full" />
-            </div>
-            
-            {/* Modal Header */}
-            <div className="flex-shrink-0 px-5 sm:px-8 pt-4 sm:pt-6 pb-5 border-b">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl sm:text-3xl font-bold text-slate-900">참석자 명단</h3>
-                <button 
-                  onClick={() => setShowParticipantsModal(false)}
-                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
-                >
-                  <X className="h-6 w-6 sm:h-7 sm:w-7 text-slate-600" />
-                </button>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-sm sm:text-base font-semibold">
-                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-                  입금완료 {participants.filter(p => p.status === 'confirmed').length}명
-                </span>
-                <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-700 rounded-full text-sm sm:text-base font-semibold">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
-                  입금대기 {participants.filter(p => p.status === 'pending').length}명
-                </span>
-                <span className="text-base sm:text-lg text-slate-500 ml-auto font-medium">
-                  총 {participants.length}명
-                </span>
-              </div>
-            </div>
-            
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto">
-              {participants.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <Users className="w-14 h-14 mb-4" />
-                  <p className="text-lg">아직 참석자가 없습니다.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {participants.map((participant, index) => (
-                    <div 
-                      key={participant.id} 
-                      className="flex items-center gap-4 px-5 sm:px-8 py-4 sm:py-5 hover:bg-slate-50 transition-colors"
-                    >
-                      {/* 번호 */}
-                      <span className="text-sm sm:text-base font-bold text-slate-400 min-w-[24px] text-right">{index + 1}</span>
-                      
-                      {/* 프로필 사진 */}
-                      {getMemberPhoto(participant.name, participant.profileImage, participant.phoneNumber) ? (
-                        <img 
-                          src={getMemberPhoto(participant.name, participant.profileImage, participant.phoneNumber)!} 
-                          alt={participant.name}
-                          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover object-top flex-shrink-0 ring-2 ring-white shadow-sm"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm">
-                          <span className="text-lg sm:text-xl font-bold text-slate-500">
-                            {participant.name.charAt(0)}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* 회원 정보 */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-base sm:text-lg text-slate-900 truncate">
-                          {participant.name}
-                          {participant.isGuest && (
-                            <span className="ml-2 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded font-semibold align-middle">게스트</span>
-                          )}
-                        </p>
-                        <p className="text-sm sm:text-base text-slate-500 truncate mt-0.5">
-                          {participant.company && participant.position 
-                            ? `${participant.company} · ${participant.position}`
-                            : participant.company 
-                              ? participant.company
-                              : participant.position || ''}
-                        </p>
-                      </div>
-                      
-                      {/* 상태 배지 */}
-                      <span className={`flex-shrink-0 text-sm sm:text-base font-bold px-3 sm:px-4 py-1.5 rounded-full ${
-                        participant.status === 'confirmed' 
-                          ? 'bg-emerald-50 text-emerald-700' 
-                          : 'bg-amber-50 text-amber-700'
-                      }`}>
-                        {participant.status === 'confirmed' ? '입금완료' : '입금대기'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="flex-shrink-0 px-5 sm:px-8 py-4 sm:py-5 border-t bg-slate-50">
-              <button 
-                onClick={() => setShowParticipantsModal(false)}
-                className="w-full px-6 py-3 sm:py-3.5 bg-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors text-base sm:text-lg"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* Teams Section - 조편성이 등록되어 있고, 신청 마감 또는 정원 마감 상태일 때만 표시 */}
       {teams.length > 0 && (applicationClosed || (isDevMode && currentApplicationStatus === 'full')) && (
@@ -2364,6 +2254,108 @@ const Events = () => {
         </div>
       )}
       </div>
+      )}
+
+      {/* ── 신청자 명단 모달 (특별산행·정기산행 공용) ── */}
+      {showParticipantsModal && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[9998] flex items-end sm:items-center justify-center"
+          onClick={() => setShowParticipantsModal(false)}
+        >
+          <div
+            className="bg-white w-full sm:max-w-2xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모바일 드래그 핸들 */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-slate-300 rounded-full" />
+            </div>
+
+            {/* 헤더 */}
+            <div className="flex-shrink-0 px-5 sm:px-8 pt-5 pb-4 border-b">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900">신청자 명단</h3>
+                <button
+                  onClick={() => setShowParticipantsModal(false)}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-600" />
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm font-semibold">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  입금완료 {participants.filter(p => p.status === 'confirmed').length}명
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-sm font-semibold">
+                  <Clock className="w-3.5 h-3.5" />
+                  입금대기 {participants.filter(p => p.status === 'pending').length}명
+                </span>
+                <span className="text-sm text-slate-500 ml-auto font-medium">총 {participants.length}명</span>
+              </div>
+            </div>
+
+            {/* 목록 */}
+            <div className="flex-1 overflow-y-auto">
+              {participants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <Users className="w-12 h-12 mb-3" />
+                  <p className="text-base">아직 신청자가 없습니다.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {participants.map((participant, index) => (
+                    <div
+                      key={participant.id}
+                      className="flex items-center gap-3 px-5 sm:px-8 py-3.5 hover:bg-slate-50 transition-colors"
+                    >
+                      <span className="text-sm font-bold text-slate-400 w-6 text-right flex-shrink-0">{index + 1}</span>
+                      {getMemberPhoto(participant.name, participant.profileImage, participant.phoneNumber) ? (
+                        <img
+                          src={getMemberPhoto(participant.name, participant.profileImage, participant.phoneNumber)!}
+                          alt={participant.name}
+                          className="w-10 h-10 rounded-full object-cover object-top flex-shrink-0 ring-2 ring-white shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0 ring-2 ring-white shadow-sm">
+                          <span className="text-base font-bold text-slate-500">{participant.name.charAt(0)}</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm sm:text-base text-slate-900 truncate">
+                          {participant.name}
+                          {participant.isGuest && (
+                            <span className="ml-2 text-xs px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-semibold align-middle">게스트</span>
+                          )}
+                        </p>
+                        <p className="text-xs sm:text-sm text-slate-500 truncate">
+                          {[participant.company, participant.position].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        participant.status === 'confirmed'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {participant.status === 'confirmed' ? '입금완료' : '입금대기'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 푸터 */}
+            <div className="flex-shrink-0 px-5 sm:px-8 py-4 border-t bg-slate-50">
+              <button
+                onClick={() => setShowParticipantsModal(false)}
+                className="w-full py-3 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
