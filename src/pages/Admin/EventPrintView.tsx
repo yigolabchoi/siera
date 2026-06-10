@@ -424,52 +424,63 @@ const EventPrintView = () => {
             </div>
           </div>
 
-          {/* 일정 - 특별산행(일차별)은 일자별로, 정기산행은 한 줄로 표시 */}
-          {event.dailySchedule && event.dailySchedule.some(d => d.items?.some(it => it.time || it.description)) ? (
-            <div className="section">
-              <h2 className="section-title">상세 일정</h2>
-              <div className="daily-schedule">
-                {event.dailySchedule.map((day, di) => {
-                  const items = (day.items || []).filter(it => it.time || it.description);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={di} className="day-block">
-                      <div className="day-title">
-                        {day.title || `${day.day}일차`}
-                        {day.date && <span className="day-date"> · {new Date(day.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</span>}
+          {/* 일정 - 특별산행(일차별)은 일자별 컬럼으로, 정기산행은 한 줄로 표시 */}
+          {(() => {
+            const validDays = (event.dailySchedule || [])
+              .map(day => ({ ...day, items: (day.items || []).filter(it => it.time || it.description) }))
+              .filter(day => day.items.length > 0);
+
+            if (validDays.length > 0) {
+              return (
+                <div className="section">
+                  <h2 className="section-title">일차별 상세 일정</h2>
+                  <div className={`daily-schedule-grid ${validDays.length >= 2 ? 'daily-cols-2' : 'daily-cols-1'}`}>
+                    {validDays.map((day, di) => (
+                      <div key={di} className="day-col">
+                        <div className="day-col-header">
+                          <span className="day-badge">{day.day}일차</span>
+                          {(day.title || day.date) && (
+                            <span className="day-col-sub">
+                              {day.date
+                                ? new Date(day.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })
+                                : (day.title && day.title !== `${day.day}일차` ? day.title : '')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="day-rows">
+                          {day.items.map((it, ii) => (
+                            <div key={ii} className="day-row">
+                              <span className="day-row-time">{it.time || '·'}</span>
+                              <span className="day-row-desc">{it.description}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="schedule-compact">
-                        {items.map((it, ii) => (
-                          <span key={ii} className="schedule-item">
-                            {it.time && <span className="schedule-time">{it.time}</span>}
-                            <span className="schedule-location">{it.description}</span>
-                            {ii < items.length - 1 && <span className="schedule-divider">→</span>}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="section-inline">
-              <h2 className="section-inline-title">당일 일정</h2>
-              {event.schedule && event.schedule.length > 0 ? (
-                <div className="schedule-compact">
-                  {event.schedule.map((item, index) => (
-                    <span key={index} className="schedule-item">
-                      <span className="schedule-time">{item.time}</span>
-                      <span className="schedule-location">{item.location}</span>
-                      {index < event.schedule.length - 1 && <span className="schedule-divider">→</span>}
-                    </span>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <p className="text-sm text-slate-600">일정 정보가 없습니다.</p>
-              )}
-            </div>
-          )}
+              );
+            }
+
+            return (
+              <div className="section-inline">
+                <h2 className="section-inline-title">당일 일정</h2>
+                {event.schedule && event.schedule.length > 0 ? (
+                  <div className="schedule-compact">
+                    {event.schedule.map((item, index) => (
+                      <span key={index} className="schedule-item">
+                        <span className="schedule-time">{item.time}</span>
+                        <span className="schedule-location">{item.location}</span>
+                        {index < event.schedule.length - 1 && <span className="schedule-divider">→</span>}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">일정 정보가 없습니다.</p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* 산행 코스 - 각 코스별 한 줄씩 표시 */}
           {event.courses && event.courses.length > 0 && (
@@ -479,7 +490,11 @@ const EventPrintView = () => {
                 {event.courses.map((course, index) => (
                   <div key={course.id || index} className="course-line">
                     <span className="course-name-line">{course.name}</span>
-                    <span className="course-distance-line">{course.distance}</span>
+                    <span className="course-distance-line">
+                      {course.distance}
+                      {course.duration && ` · ${course.duration}`}
+                      {course.difficulty && ` · 난이도 ${course.difficulty}`}
+                    </span>
                     <span className="course-desc-line">{course.description}</span>
                   </div>
                 ))}
@@ -897,29 +912,70 @@ const EventPrintView = () => {
           margin: 0 4px;
         }
 
-        /* 특별산행 - 일차별 일정 */
-        .daily-schedule {
+        /* 특별산행 - 일차별 일정 (좌우 컬럼) */
+        .daily-schedule-grid {
+          display: grid;
+          gap: 10px;
+        }
+
+        .daily-cols-1 { grid-template-columns: 1fr; }
+        .daily-cols-2 { grid-template-columns: 1fr 1fr; }
+
+        .day-col {
+          border: 1.5px solid #333;
+          padding: 0;
+          background: white;
+        }
+
+        .day-col-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: #f4f4f4;
+          border-bottom: 1.5px solid #333;
+          padding: 5px 8px;
+        }
+
+        .day-badge {
+          font-size: 12px;
+          font-weight: 900;
+          color: #fff;
+          background: #1a1a1a;
+          border-radius: 3px;
+          padding: 1px 7px;
+        }
+
+        .day-col-sub {
+          font-size: 11px;
+          font-weight: 700;
+          color: #555;
+        }
+
+        .day-rows {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          padding: 6px 8px;
+          gap: 3px;
         }
 
-        .day-block {
-          border-left: 3px solid #333;
-          padding: 2px 0 2px 8px;
+        .day-row {
+          display: flex;
+          align-items: baseline;
+          gap: 8px;
+          font-size: 11px;
+          line-height: 1.45;
         }
 
-        .day-title {
-          font-size: 12px;
+        .day-row-time {
           font-weight: 800;
           color: #1a1a1a;
-          margin-bottom: 2px;
+          min-width: 38px;
+          flex-shrink: 0;
         }
 
-        .day-date {
-          font-size: 11px;
+        .day-row-desc {
           font-weight: 600;
-          color: #666;
+          color: #444;
         }
 
         .trip-nights {
@@ -1022,6 +1078,8 @@ const EventPrintView = () => {
           font-weight: 700;
           color: #555;
           min-width: 60px;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .course-desc-line {
