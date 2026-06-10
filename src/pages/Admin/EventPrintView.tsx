@@ -379,12 +379,24 @@ const EventPrintView = () => {
                 {event.title}
               </div>
               <div className="event-date">
-                {new Date(event.date).toLocaleDateString('ko-KR', { 
+                {new Date(event.date).toLocaleDateString('ko-KR', {
                   year: 'numeric',
-                  month: 'long', 
+                  month: 'long',
                   day: 'numeric',
                   weekday: 'long'
                 })}
+                {event.endDate && event.endDate !== event.date && (
+                  <> ~ {new Date(event.endDate).toLocaleDateString('ko-KR', {
+                    month: 'long',
+                    day: 'numeric',
+                    weekday: 'long'
+                  })}
+                  {(() => {
+                    const diff = Math.round((new Date(event.endDate).getTime() - new Date(event.date).getTime()) / 86400000);
+                    return diff > 0 ? <span className="trip-nights"> ({diff}박{diff + 1}일)</span> : null;
+                  })()}
+                  </>
+                )}
               </div>
               <div className="mountain-info">
                 <span className="mountain-name">{event.mountain || event.location}</span>
@@ -412,23 +424,52 @@ const EventPrintView = () => {
             </div>
           </div>
 
-          {/* 일정 - 타이틀과 내용을 한 줄로 표시 */}
-          <div className="section-inline">
-            <h2 className="section-inline-title">당일 일정</h2>
-            {event.schedule && event.schedule.length > 0 ? (
-              <div className="schedule-compact">
-                {event.schedule.map((item, index) => (
-                  <span key={index} className="schedule-item">
-                    <span className="schedule-time">{item.time}</span>
-                    <span className="schedule-location">{item.location}</span>
-                    {index < event.schedule.length - 1 && <span className="schedule-divider">→</span>}
-                  </span>
-                ))}
+          {/* 일정 - 특별산행(일차별)은 일자별로, 정기산행은 한 줄로 표시 */}
+          {event.dailySchedule && event.dailySchedule.some(d => d.items?.some(it => it.time || it.description)) ? (
+            <div className="section">
+              <h2 className="section-title">상세 일정</h2>
+              <div className="daily-schedule">
+                {event.dailySchedule.map((day, di) => {
+                  const items = (day.items || []).filter(it => it.time || it.description);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={di} className="day-block">
+                      <div className="day-title">
+                        {day.title || `${day.day}일차`}
+                        {day.date && <span className="day-date"> · {new Date(day.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</span>}
+                      </div>
+                      <div className="schedule-compact">
+                        {items.map((it, ii) => (
+                          <span key={ii} className="schedule-item">
+                            {it.time && <span className="schedule-time">{it.time}</span>}
+                            <span className="schedule-location">{it.description}</span>
+                            {ii < items.length - 1 && <span className="schedule-divider">→</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <p className="text-sm text-slate-600">일정 정보가 없습니다.</p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="section-inline">
+              <h2 className="section-inline-title">당일 일정</h2>
+              {event.schedule && event.schedule.length > 0 ? (
+                <div className="schedule-compact">
+                  {event.schedule.map((item, index) => (
+                    <span key={index} className="schedule-item">
+                      <span className="schedule-time">{item.time}</span>
+                      <span className="schedule-location">{item.location}</span>
+                      {index < event.schedule.length - 1 && <span className="schedule-divider">→</span>}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">일정 정보가 없습니다.</p>
+              )}
+            </div>
+          )}
 
           {/* 산행 코스 - 각 코스별 한 줄씩 표시 */}
           {event.courses && event.courses.length > 0 && (
@@ -854,6 +895,37 @@ const EventPrintView = () => {
           font-weight: 700;
           color: #999;
           margin: 0 4px;
+        }
+
+        /* 특별산행 - 일차별 일정 */
+        .daily-schedule {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .day-block {
+          border-left: 3px solid #333;
+          padding: 2px 0 2px 8px;
+        }
+
+        .day-title {
+          font-size: 12px;
+          font-weight: 800;
+          color: #1a1a1a;
+          margin-bottom: 2px;
+        }
+
+        .day-date {
+          font-size: 11px;
+          font-weight: 600;
+          color: #666;
+        }
+
+        .trip-nights {
+          font-size: 12px;
+          font-weight: 700;
+          color: #666;
         }
 
         /* 코스 */
