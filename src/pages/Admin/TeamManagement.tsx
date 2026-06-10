@@ -692,11 +692,6 @@ const TeamManagement = () => {
                               {member.isGuest && (
                                 <Badge variant="warning" className="text-xs">게스트</Badge>
                               )}
-                              {member.course && (
-                                <Badge variant="info" className="text-xs">
-                                  {member.course}
-                                </Badge>
-                              )}
                             </div>
                             <p className="text-sm text-slate-600">{displayInfo}</p>
                           </div>
@@ -904,11 +899,6 @@ const TeamManagement = () => {
                                             <span className="ml-2 text-amber-600 font-bold">(G)</span>
                                           )}
                                         </p>
-                                        {member.course && (
-                                          <Badge variant="info" className="text-xs">
-                                            {member.course}
-                                          </Badge>
-                                        )}
                                       </div>
                                       <p className="text-sm text-slate-600">
                                         {member.company && member.position
@@ -1119,11 +1109,6 @@ const TeamManagement = () => {
                               </p>
                               {member.isGuest && (
                                 <Badge variant="warning" className="text-xs">게스트</Badge>
-                              )}
-                              {member.course && (
-                                <Badge variant="info" className="text-xs">
-                                  {member.course}
-                                </Badge>
                               )}
                               <Badge variant={paymentLabel.variant} className="text-xs">
                                 {paymentLabel.text}
