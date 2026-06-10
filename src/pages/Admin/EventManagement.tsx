@@ -590,11 +590,6 @@ const EventManagement = () => {
       return;
     }
 
-    if (!event.applicationDeadline) {
-      alert('신청 마감일을 먼저 설정해주세요.');
-      return;
-    }
-    
     if (confirm('산행을 공개하고 신청 접수를 시작하시겠습니까?')) {
       try {
         await updateEvent(eventId, { status: 'open', isPublished: true });
@@ -1407,33 +1402,19 @@ const EventManagement = () => {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-2">
-                      산행 날짜
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, date: val })); }}
-                      className="input-field"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-700 font-medium mb-2">
-                      신청 마감일시
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={formData.applicationDeadline || ''}
-                      onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, applicationDeadline: val })); }}
-                      className="input-field"
-                      max={formData.date ? `${formData.date}T23:59` : undefined}
-                    />
-                    <p className="text-xs text-slate-500 mt-1">
-                      신청 마감일시는 산행 날짜 이전이어야 합니다 (예: 2025-03-01 18:00)
-                    </p>
-                  </div>
+                <div>
+                  <label className="block text-slate-700 font-medium mb-2">
+                    산행 날짜
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, date: val })); }}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    신청 마감일은 별도로 설정하지 않습니다. <strong>조 편성이 완료되면</strong> 조 편성 관리에서 신청을 마감합니다.
+                  </p>
                 </div>
 
                 <div className="space-y-4">
@@ -2335,21 +2316,12 @@ const EventManagement = () => {
                               <span className="text-slate-600">참가비</span>
                               <span className="font-semibold text-slate-900">{event.paymentInfo?.cost || event.cost}</span>
                             </div>
-                            {event.applicationDeadline && (
+                            {event.status === 'closed' && (
                               <>
                                 <span className="text-slate-300 hidden sm:inline">|</span>
                                 <div className="flex items-center gap-1.5 sm:gap-2">
                                   <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500 flex-shrink-0" />
-                                  <span className="text-slate-600">
-                                    마감: {new Date(event.applicationDeadline).toLocaleDateString('ko-KR', {
-                                      month: 'long',
-                                      day: 'numeric'
-                                    })} {new Date(event.applicationDeadline).toLocaleTimeString('ko-KR', {
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                      hour12: false
-                                    })}
-                                  </span>
+                                  <span className="text-slate-600">신청 마감 (조 편성 완료)</span>
                                 </div>
                               </>
                             )}

@@ -330,8 +330,8 @@ const Events = () => {
   const applicationClosed = useMemo(() => {
     if (!event) return false;
     if (!isDevMode) {
-      // 관리자가 수동으로 마감했거나, 날짜 기반 마감일이 지났으면 마감 처리
-      return event.status === 'closed' || event.status === 'ongoing' || event.status === 'completed' || isApplicationClosed(event.date, event.applicationDeadline);
+      // 조 편성이 완료되면 관리자가 산행을 마감(status='closed')합니다. 별도 마감일은 없습니다.
+      return event.status === 'closed' || event.status === 'ongoing' || event.status === 'completed';
     }
     return currentApplicationStatus === 'closed';
   }, [isDevMode, currentApplicationStatus, event]);
@@ -1319,22 +1319,7 @@ const Events = () => {
                 <div className="flex-1 min-w-0">
                   <h4 className="text-base sm:text-lg font-bold text-red-900 mb-0.5 sm:mb-1">신청 마감</h4>
                   <p className="text-xs sm:text-sm text-red-700">
-                    신청 기간이 종료되었습니다. ({applicationDeadline} 마감)
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : daysUntilDeadline <= 3 ? (
-            <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-amber-500 rounded-full flex items-center justify-center">
-                  <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white animate-pulse" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-base sm:text-lg font-bold text-amber-900 mb-0.5 sm:mb-1">마감 임박!</h4>
-                  <p className="text-xs sm:text-sm text-amber-700">
-                    신청 마감까지 <strong className="text-amber-900">{daysUntilDeadline}일</strong> 남았습니다. 
-                    <span className="ml-1 sm:ml-2 text-amber-600">({applicationDeadline} 까지)</span>
+                    조 편성이 완료되어 신청이 마감되었습니다.
                   </p>
                 </div>
               </div>
@@ -1346,10 +1331,9 @@ const Events = () => {
                   <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-base sm:text-lg font-bold text-blue-900 mb-0.5 sm:mb-1">신청 기간</h4>
+                  <h4 className="text-base sm:text-lg font-bold text-blue-900 mb-0.5 sm:mb-1">신청 접수 중</h4>
                   <p className="text-xs sm:text-sm text-blue-700">
-                    <strong className="text-blue-900">{applicationDeadline}</strong>까지 신청 가능합니다.
-                    {!event?.applicationDeadline && <span className="ml-1 sm:ml-2 text-blue-600">(출발일 7일 전 마감)</span>}
+                    지금 신청 가능합니다. <strong className="text-blue-900">조 편성이 완료되면</strong> 신청이 마감됩니다.
                   </p>
                 </div>
               </div>

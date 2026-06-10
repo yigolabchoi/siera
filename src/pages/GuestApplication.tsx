@@ -191,7 +191,9 @@ const GuestApplication = () => {
 
   const applicationDeadline = currentEvent ? formatDeadline(currentEvent.date, currentEvent.applicationDeadline) : '';
   const daysUntilDeadline = currentEvent ? getDaysUntilDeadline(currentEvent.date, currentEvent.applicationDeadline) : 0;
-  const applicationClosed = currentEvent ? isApplicationClosed(currentEvent.date, currentEvent.applicationDeadline) : true;
+  const applicationClosed = currentEvent
+    ? (currentEvent.status === 'closed' || currentEvent.status === 'ongoing' || currentEvent.status === 'completed')
+    : true;
 
   // 이미 인증된 사용자가 intro 페이지 진입 시 자동 처리 (신청 모드)
   useEffect(() => {
@@ -759,21 +761,14 @@ const GuestApplication = () => {
                     <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
                       <div className="flex items-center gap-2">
                         <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                        <p className="text-xs font-bold text-red-700">신청 마감</p>
-                      </div>
-                    </div>
-                  ) : daysUntilDeadline <= 3 ? (
-                    <div className="mt-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 animate-pulse" />
-                        <p className="text-xs font-bold text-amber-700">마감 {daysUntilDeadline}일 전 ({applicationDeadline})</p>
+                        <p className="text-xs font-bold text-red-700">신청 마감 (조 편성 완료)</p>
                       </div>
                     </div>
                   ) : (
                     <div className="mt-3 p-2 bg-blue-50 border border-blue-100 rounded-lg">
                       <div className="flex items-center gap-2 text-xs text-blue-700">
                         <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span>마감: <strong>{applicationDeadline}</strong></span>
+                        <span>신청 접수 중 · <strong>조 편성 완료 시 마감</strong></span>
                       </div>
                     </div>
                   )

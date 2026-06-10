@@ -208,8 +208,8 @@ export default function QuickEventApply() {
 
   const applicationDeadline = currentEvent ? formatDeadline(currentEvent.date, currentEvent.applicationDeadline) : '';
   const daysUntilDeadline = currentEvent ? getDaysUntilDeadline(currentEvent.date, currentEvent.applicationDeadline) : 0;
-  const applicationClosed = currentEvent 
-    ? (currentEvent.status === 'closed' || currentEvent.status === 'ongoing' || currentEvent.status === 'completed' || isApplicationClosed(currentEvent.date, currentEvent.applicationDeadline)) 
+  const applicationClosed = currentEvent
+    ? (currentEvent.status === 'closed' || currentEvent.status === 'ongoing' || currentEvent.status === 'completed')
     : true;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,7 +217,7 @@ export default function QuickEventApply() {
     if (!selectedMember) { alert('등록된 회원을 선택해주세요.'); return; }
     if (!currentEvent) { alert('현재 신청 가능한 산행이 없습니다.'); return; }
     if (currentEvent.courses && currentEvent.courses.length > 0 && !selectedCourse) { alert('코스를 선택해주세요.'); return; }
-    if (currentEvent.status === 'closed' || currentEvent.status === 'ongoing' || currentEvent.status === 'completed' || isApplicationClosed(currentEvent.date, currentEvent.applicationDeadline)) { alert('신청 기간이 마감되었습니다.'); return; }
+    if (currentEvent.status === 'closed' || currentEvent.status === 'ongoing' || currentEvent.status === 'completed') { alert('조 편성이 완료되어 신청이 마감되었습니다.'); return; }
     const existingParticipations = getParticipationsByEvent(currentEvent.id);
     // 취소된 참가는 재신청 허용 (환불 처리 후 재신청 가능하도록)
     const alreadyApplied = existingParticipations.some(p => p.userId === selectedMember.id && p.status !== 'cancelled');
@@ -429,17 +429,7 @@ export default function QuickEventApply() {
                     <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
                     <div>
                       <p className="text-sm font-bold text-red-700">신청 마감</p>
-                      <p className="text-xs text-red-600">신청 기간이 종료되었습니다. ({applicationDeadline} 마감)</p>
-                    </div>
-                  </div>
-                </div>
-              ) : daysUntilDeadline <= 3 ? (
-                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-amber-500 flex-shrink-0 animate-pulse" />
-                    <div>
-                      <p className="text-sm font-bold text-amber-700">마감 임박!</p>
-                      <p className="text-xs text-amber-600">마감까지 <strong>{daysUntilDeadline}일</strong> 남았습니다. ({applicationDeadline})</p>
+                      <p className="text-xs text-red-600">조 편성이 완료되어 신청이 마감되었습니다.</p>
                     </div>
                   </div>
                 </div>
@@ -447,7 +437,7 @@ export default function QuickEventApply() {
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
                   <div className="flex items-center gap-2 text-sm text-blue-700">
                     <Clock className="w-4 h-4 flex-shrink-0" />
-                    <span>신청 마감: <strong>{applicationDeadline}</strong></span>
+                    <span>신청 접수 중 · <strong>조 편성 완료 시 마감</strong></span>
                   </div>
                 </div>
               )}

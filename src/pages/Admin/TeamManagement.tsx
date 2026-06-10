@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Save, X, Users, Shield, CheckCircle, Calendar, MapPin, AlertCircle, Copy, Check, Trash2 } from 'lucide-react';
+import { Plus, Edit, Save, X, Users, Shield, CheckCircle, Calendar, MapPin, AlertCircle, Copy, Check, Trash2, Lock } from 'lucide-react';
 import { useEvents } from '../../contexts/EventContext';
 import { useMembers } from '../../contexts/MemberContext';
 import { usePayments } from '../../contexts/PaymentContext';
@@ -11,13 +11,14 @@ import FilterGroup from '../../components/ui/FilterGroup';
 import { Team, TeamMember, HikingEvent, Payment } from '../../types';
 
 const TeamManagement = () => {
-  const { 
-    events: contextEvents, 
-    getParticipantsByEventId, 
+  const {
+    events: contextEvents,
+    getParticipantsByEventId,
     setTeamsForEvent,
     teams: contextTeams,
     getTeamsByEventId,
-    refreshParticipants
+    refreshParticipants,
+    updateEvent
   } = useEvents();
   const { members } = useMembers();
   const { payments, getPaymentsByEvent } = usePayments();
@@ -185,6 +186,43 @@ const TeamManagement = () => {
       }
     }
   }, [selectedEventIdForTeam, contextTeams, events, refreshParticipants, members, participations]);
+
+  // 현재 선택된 산행
+  const selectedEventForTeam = events.find(e => e.id === selectedEventIdForTeam) || null;
+  const isEventClosed = selectedEventForTeam
+    ? (selectedEventForTeam.status === 'closed' || selectedEventForTeam.status === 'ongoing' || selectedEventForTeam.status === 'completed')
+    : false;
+
+  // 조 편성 완료 → 산행 신청 마감 (status='closed')
+  const handleFinalizeTeams = async () => {
+    if (!selectedEventForTeam) return;
+    const assignedCount = teams.reduce((sum, t) => sum + (t.leaderId ? t.members.length + 1 : t.members.length), 0);
+    if (assignedCount === 0) {
+      alert('아직 배정된 인원이 없습니다. 조 편성을 먼저 진행해주세요.');
+      return;
+    }
+    if (!confirm(`조 편성을 완료하고 산행 신청을 마감하시겠습니까?\n\n현재 ${teams.length}개 조 · ${assignedCount}명 배정\n\n마감 후에는 추가 신청을 받을 수 없습니다.`)) return;
+    try {
+      await updateEvent(selectedEventForTeam.id, { status: 'closed' });
+      alert('조 편성이 완료되어 산행 신청이 마감되었습니다.');
+    } catch (error: any) {
+      console.error('산행 마감 실패:', error);
+      alert(`산행 마감에 실패했습니다: ${error.message}`);
+    }
+  };
+
+  // 신청 재오픈 (closed → open)
+  const handleReopenApplication = async () => {
+    if (!selectedEventForTeam) return;
+    if (!confirm('산행 신청을 다시 오픈하시겠습니까?\n추가 신청을 받을 수 있습니다.')) return;
+    try {
+      await updateEvent(selectedEventForTeam.id, { status: 'open' });
+      alert('산행 신청이 다시 오픈되었습니다.');
+    } catch (error: any) {
+      console.error('신청 재오픈 실패:', error);
+      alert(`신청 재오픈에 실패했습니다: ${error.message}`);
+    }
+  };
 
   // 선택된 산행의 조 편성 — 번호 오름차순 정렬
   const filteredTeams = [...teams].sort((a, b) => {
@@ -716,6 +754,45 @@ const TeamManagement = () => {
 
           {selectedEventIdForTeam ? (
             <>
+              {/* 조 편성 완료 / 산행 마감 액션 바 */}
+              <div className={`mb-6 rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${
+                isEventClosed ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {isEventClosed ? (
+                    <Lock className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <p className={`font-bold ${isEventClosed ? 'text-red-900' : 'text-emerald-900'}`}>
+                      {isEventClosed ? '신청 마감됨 (조 편성 완료)' : '신청 접수 중'}
+                    </p>
+                    <p className={`text-sm mt-0.5 ${isEventClosed ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {isEventClosed
+                        ? '추가 신청이 중단된 상태입니다. 필요하면 신청을 다시 열 수 있습니다.'
+                        : '조 편성이 모두 끝나면 아래 버튼으로 산행 신청을 마감하세요.'}
+                    </p>
+                  </div>
+                </div>
+                {isEventClosed ? (
+                  <button
+                    onClick={handleReopenApplication}
+                    className="flex-shrink-0 px-5 py-2.5 bg-white border border-red-300 text-red-700 rounded-xl font-semibold text-sm hover:bg-red-100 transition-colors"
+                  >
+                    신청 다시 열기
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFinalizeTeams}
+                    className="flex-shrink-0 px-5 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold text-sm hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Lock className="w-4 h-4" />
+                    조 편성 완료 · 산행 마감
+                  </button>
+                )}
+              </div>
+
               {/* 참석자 리스트 복사 버튼 */}
               <div className="flex justify-end mb-4">
                 <button
