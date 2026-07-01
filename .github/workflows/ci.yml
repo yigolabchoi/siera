@@ -12,47 +12,43 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    
+
     steps:
       # 1. 코드 체크아웃
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       # 2. Node.js 설정
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: hiking-club/package-lock.json
-      
+
       # 3. 의존성 설치
       - name: Install dependencies
-        working-directory: ./hiking-club
         run: npm ci
-      
+
       # 4. ESLint 검사
       - name: Run ESLint
-        working-directory: ./hiking-club
         run: npm run lint
         continue-on-error: true
-      
+
       # 5. TypeScript 타입 체크 및 빌드
       - name: Build project
-        working-directory: ./hiking-club
         run: npm run build
-      
+
       # 6. 빌드 결과 업로드 (아티팩트)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: hiking-club/dist/
+          path: dist/
           retention-days: 7
-      
+
       # 7. 빌드 통계 출력
       - name: Build statistics
-        working-directory: ./hiking-club/dist
+        working-directory: ./dist
         run: |
           echo "📊 빌드 통계:"
           echo "총 파일 수: $(find . -type f | wc -l)"
