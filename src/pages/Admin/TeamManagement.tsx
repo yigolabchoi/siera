@@ -80,7 +80,15 @@ const TeamManagement = () => {
             .filter(payment => payment.refundStatus === 'completed')
             .map(payment => payment.userId)
         );
-        
+
+        // 이 이벤트에 유효한(환불/취소 아닌) 결제가 있는 userId 목록
+        // — 환불 후 재신청한 회원이 userId 기반 조회로 잘못 제거되는 것을 방지
+        const activePaymentUserIds = new Set(
+          eventPayments
+            .filter(payment => payment.refundStatus !== 'completed' && payment.paymentStatus !== 'cancelled')
+            .map(payment => payment.userId)
+        );
+
         // 현재 유효한 참가 신청 ID 목록 (취소되지 않은 것만)
         const validParticipationIds = new Set(
           eventParticipations
@@ -116,7 +124,7 @@ const TeamManagement = () => {
           const leaderUserId = participationUserMap.get(team.leaderId);
           const isLeaderRefunded =
             (leaderPayment ? refundedUserIds.has(leaderPayment.userId) : false) ||
-            (leaderUserId ? refundedUserIds.has(leaderUserId) : false);
+            (leaderUserId ? refundedUserIds.has(leaderUserId) && !activePaymentUserIds.has(leaderUserId) : false);
           const isLeaderParticipationValid = validParticipationIds.has(team.leaderId);
           const shouldRemoveLeader = isLeaderRefunded || !isLeaderParticipationValid;
 
@@ -150,7 +158,7 @@ const TeamManagement = () => {
               const memberUserId = participationUserMap.get(member.id);
               const isRefunded =
                 (payment ? refundedUserIds.has(payment.userId) : false) ||
-                (memberUserId ? refundedUserIds.has(memberUserId) : false);
+                (memberUserId ? refundedUserIds.has(memberUserId) && !activePaymentUserIds.has(memberUserId) : false);
               const isParticipationValid = validParticipationIds.has(member.id);
               return !isRefunded && isParticipationValid;
             }).map(member => {
