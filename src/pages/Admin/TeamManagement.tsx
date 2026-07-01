@@ -111,8 +111,12 @@ const TeamManagement = () => {
         // 환불된 사용자를 조원 목록에서 제거 + members DB에서 최신 정보 보강
         const filteredTeams = existingTeams.map(team => {
           // 조장 확인: 참가 신청이 유효하고 환불되지 않았는지
+          // participationId 기반 결제 조회 + userId 직접 조회(participationId 없는 레거시 결제 대응)
           const leaderPayment = eventPayments.find(p => p.participationId === team.leaderId);
-          const isLeaderRefunded = leaderPayment ? refundedUserIds.has(leaderPayment.userId) : false;
+          const leaderUserId = participationUserMap.get(team.leaderId);
+          const isLeaderRefunded =
+            (leaderPayment ? refundedUserIds.has(leaderPayment.userId) : false) ||
+            (leaderUserId ? refundedUserIds.has(leaderUserId) : false);
           const isLeaderParticipationValid = validParticipationIds.has(team.leaderId);
           const shouldRemoveLeader = isLeaderRefunded || !isLeaderParticipationValid;
 
@@ -141,8 +145,12 @@ const TeamManagement = () => {
             leaderPosition: shouldRemoveLeader ? '' : leaderPosition,
             // 환불되었거나 신청 취소된 조원 제거 + 정보 보강
             members: team.members?.filter(member => {
+              // participationId 기반 결제 조회 + userId 직접 조회(participationId 없는 레거시 결제 대응)
               const payment = eventPayments.find(p => p.participationId === member.id);
-              const isRefunded = payment ? refundedUserIds.has(payment.userId) : false;
+              const memberUserId = participationUserMap.get(member.id);
+              const isRefunded =
+                (payment ? refundedUserIds.has(payment.userId) : false) ||
+                (memberUserId ? refundedUserIds.has(memberUserId) : false);
               const isParticipationValid = validParticipationIds.has(member.id);
               return !isRefunded && isParticipationValid;
             }).map(member => {
