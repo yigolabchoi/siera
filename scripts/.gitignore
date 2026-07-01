@@ -1,3 +1,8 @@
 # scripts/ 폴더 - Firebase Admin SDK
 # Service Account Key는 민감한 정보이므로 Git에 커밋하지 않음
 serviceAccountKey.json
+
+# 일회성 데이터 보정 스크립트 보관소
+# (특정 회원/문서 ID가 하드코딩된 단발성 스크립트 — 재사용 가치 없음, PII 포함)
+# 디스크에는 남기되 Git에는 커밋하지 않음
+archive/
