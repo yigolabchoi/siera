@@ -1301,7 +1301,7 @@ const GuestApplication = () => {
                   {completeEvent.paymentInfo.cost && (
                     <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
                       <p className="text-sm text-emerald-700 mb-1">참가비</p>
-                      <p className="text-2xl font-bold text-emerald-900">{completeEvent.paymentInfo.cost}원</p>
+                      <p className="text-2xl font-bold text-emerald-900">{`${String(completeEvent.paymentInfo.cost).replace(/원\s*$/, '')}원`}</p>
                     </div>
                   )}
 
