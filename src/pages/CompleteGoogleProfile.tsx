@@ -526,7 +526,24 @@ const CompleteGoogleProfile = () => {
         }
       }
 
-      // ===== 매칭 실패: pendingUsers에 저장 (관리자 승인 대기) =====
+      // ===== 매칭 실패 =====
+      // 게스트 산행 신청 흐름인 경우 → pendingUsers(가입 승인 대기)를 거치지 않고
+      // createGuestParticipation이 즉시 회원명부에 role='guest'로 등록한 뒤 참여 생성
+      if (guestEventId) {
+        await createGuestParticipation({
+          name: trimmedName,
+          phoneNumber: normalizedPhone,
+          email: firebaseUser.email || '',
+          company: formData.company,
+          position: formData.position,
+        });
+        setIsSubmitting(false);
+        reloadUserFromFirestore().catch(() => {}); // 백그라운드 리로드
+        navigateToGuestComplete(trimmedName);
+        return;
+      }
+
+      // ===== 일반 회원가입: pendingUsers에 저장 (관리자 승인 대기) =====
       const pendingUserData = {
         id: firebaseUser.uid,
         name: trimmedName,
@@ -549,21 +566,6 @@ const CompleteGoogleProfile = () => {
 
       if (result.success) {
         console.log('✅ 가입 신청 완료 (관리자 승인 대기)');
-
-        // 게스트 산행 신청 흐름인 경우 → 참여 생성 후 게스트 완료 페이지로 이동
-        if (guestEventId) {
-          await createGuestParticipation({
-            name: trimmedName,
-            phoneNumber: normalizedPhone,
-            email: firebaseUser.email || '',
-            company: formData.company,
-            position: formData.position,
-          });
-          setIsSubmitting(false);
-          reloadUserFromFirestore().catch(() => {}); // 백그라운드 리로드
-          navigateToGuestComplete(trimmedName);
-          return;
-        }
 
         // 승인 대기 UI 표시
         setMatchedName(trimmedName);
