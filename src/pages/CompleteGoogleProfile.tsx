@@ -1,12 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UserPlus, ArrowLeft, AlertCircle, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { UserPlus, ArrowLeft, AlertCircle, Loader2, CheckCircle, Clock, Building2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContextEnhanced';
 import { useEvents } from '../contexts/EventContext';
 import { useParticipations } from '../contexts/ParticipationContext';
 import { useGuestApplications } from '../contexts/GuestApplicationContext';
+import { useMembers } from '../contexts/MemberContext';
 import { formatPhoneNumberInput, removePhoneNumberHyphens } from '../utils/format';
 import { setDocument, queryDocuments, updateDocument, deleteDocument } from '../lib/firebase/firestore';
+
+// 추천인 검색 결과 마스킹 (간편 산행 신청과 동일한 방식 — 최소 정보만 노출)
+const maskReferrerName = (name: string): string => {
+  if (!name) return '';
+  if (name.length <= 1) return name;
+  if (name.length === 2) return name[0] + '*';
+  return name[0] + '*'.repeat(name.length - 2) + name[name.length - 1];
+};
+const maskReferrerCompany = (company: string): string => {
+  if (!company) return '';
+  if (company.length <= 1) return '*';
+  if (company.length <= 3) return company[0] + '*'.repeat(company.length - 1);
+  return company.slice(0, 2) + '*'.repeat(company.length - 2);
+};
 
 const CompleteGoogleProfile = () => {
   const navigate = useNavigate();
@@ -16,6 +31,7 @@ const CompleteGoogleProfile = () => {
   const { events } = useEvents();
   const { addParticipation, participations } = useParticipations();
   const { addGuestApplication } = useGuestApplications();
+  const { members } = useMembers();
 
   // 게스트 산행 대상 이벤트 조회
   const guestEvent = useMemo(() => {
@@ -38,6 +54,17 @@ const CompleteGoogleProfile = () => {
     applicationMessage: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showReferrerSuggestions, setShowReferrerSuggestions] = useState(false);
+
+  // 추천인 검색 결과 (승인된 회원만, 최대 8명)
+  const referrerSuggestions = useMemo(() => {
+    const q = formData.referredBy.trim();
+    if (!q) return [];
+    return members
+      .filter(m => m.isApproved && m.isActive !== false)
+      .filter(m => m.name.includes(q))
+      .slice(0, 8);
+  }, [formData.referredBy, members]);
 
   // Google 로그인 상태 확인 및 기존 회원 리다이렉트 (auth 로딩 완료 후에만 체크)
   useEffect(() => {
@@ -871,7 +898,7 @@ const CompleteGoogleProfile = () => {
                   )}
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block text-white font-semibold mb-2 text-sm">
                     추천인 (선택)
                   </label>
@@ -880,13 +907,47 @@ const CompleteGoogleProfile = () => {
                     name="referredBy"
                     value={formData.referredBy}
                     onChange={handleChange}
+                    onFocus={() => setShowReferrerSuggestions(true)}
                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     placeholder="추천해주신 회원의 이름을 입력해주세요"
+                    autoComplete="off"
                   />
                   <p className="mt-2 text-xs text-amber-400 flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                     추천인이 있으신 경우 반드시 입력해주세요.
                   </p>
+
+                  {showReferrerSuggestions && referrerSuggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                      <div className="p-2">
+                        <p className="text-xs text-slate-500 px-3 py-1.5">검색 결과 ({referrerSuggestions.length}명)</p>
+                        {referrerSuggestions.map(member => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, referredBy: member.name }));
+                              setShowReferrerSuggestions(false);
+                            }}
+                            className="w-full p-2.5 rounded-lg hover:bg-slate-700 transition-colors text-left flex items-center gap-2.5"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold flex-shrink-0 text-xs">
+                              {member.name.charAt(0)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-white text-sm truncate">{maskReferrerName(member.name)}</p>
+                              {member.company && (
+                                <p className="text-xs text-slate-400 flex items-center gap-1 truncate">
+                                  <Building2 className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">{maskReferrerCompany(member.company)}</span>
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
