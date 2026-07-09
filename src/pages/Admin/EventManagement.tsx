@@ -5,14 +5,18 @@ import { useNavigate } from 'react-router-dom';
 import { useEvents } from '../../contexts/EventContext';
 import { useMembers } from '../../contexts/MemberContext';
 import { useExecutives } from '../../contexts/ExecutiveContext';
+import { useParticipations } from '../../contexts/ParticipationContext';
+import { usePayments } from '../../contexts/PaymentContext';
+import { useGuestApplications } from '../../contexts/GuestApplicationContext';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import AddressSearch from '../../components/AddressSearch';
 import MountainSearch from '../../components/MountainSearch';
-import { HikingEvent, PaymentInfo, ScheduleItem, Course, DaySchedule, DayScheduleItem } from '../../types';
+import { HikingEvent, PaymentInfo, ScheduleItem, Course, DaySchedule, DayScheduleItem, User } from '../../types';
 import { generateEventTitle, getNextEventNumber } from '../../utils/eventTitle';
 import { uploadImage, deleteFile } from '../../lib/firebase/storage';
+import { formatPhoneNumberInput, removePhoneNumberHyphens } from '../../utils/format';
 
 type TabType = 'events';
 
@@ -21,6 +25,205 @@ const EventManagement = () => {
   const { events: contextEvents, addEvent, updateEvent, deleteEvent, getParticipantsByEventId } = useEvents();
   const { members, getMembersByPosition } = useMembers();
   const { executives: executiveList, getExecutivesByCategory } = useExecutives();
+  const { addParticipation, getParticipationsByEvent } = useParticipations();
+  const { createPaymentForParticipation } = usePayments();
+  const { addGuestApplication } = useGuestApplications();
+
+  // ===== 운영진 대리 신청 (회원/게스트) =====
+  const [registerEvent, setRegisterEvent] = useState<HikingEvent | null>(null);
+  const [registerTab, setRegisterTab] = useState<'member' | 'guest'>('member');
+  const [registerMemberSearchQuery, setRegisterMemberSearchQuery] = useState('');
+  const [selectedMemberForRegister, setSelectedMemberForRegister] = useState<User | null>(null);
+  const [guestRegisterForm, setGuestRegisterForm] = useState({ name: '', phoneNumber: '', company: '', position: '' });
+  const [guestRegisterErrors, setGuestRegisterErrors] = useState<Record<string, string>>({});
+  const [isRegisteringParticipant, setIsRegisteringParticipant] = useState(false);
+
+  const closeRegisterModal = () => {
+    setRegisterEvent(null);
+    setRegisterTab('member');
+    setRegisterMemberSearchQuery('');
+    setSelectedMemberForRegister(null);
+    setGuestRegisterForm({ name: '', phoneNumber: '', company: '', position: '' });
+    setGuestRegisterErrors({});
+  };
+
+  const registerEventParticipations = registerEvent ? getParticipationsByEvent(registerEvent.id) : [];
+
+  // 이름/회사/직책으로 검색되는 승인된 회원 목록 (최대 8명)
+  const memberSearchResults = useMemo(() => {
+    const q = registerMemberSearchQuery.trim();
+    if (!q) return [];
+    return members
+      .filter(m => m.isApproved && m.isActive !== false)
+      .filter(m => m.name.includes(q) || (m.company || '').includes(q) || (m.position || '').includes(q))
+      .slice(0, 8);
+  }, [registerMemberSearchQuery, members]);
+
+  const isMemberAlreadyRegistered = (memberId: string) =>
+    registerEventParticipations.some(p => p.userId === memberId && p.status !== 'cancelled');
+
+  // 마감/정원 초과 시 운영진에게 확인만 받고 진행 (강제 차단하지 않음)
+  const confirmOverbookingIfNeeded = (event: HikingEvent): boolean => {
+    const isClosed = event.status === 'closed' || event.status === 'ongoing' || event.status === 'completed';
+    const isFull = (event.currentParticipants || 0) >= event.maxParticipants;
+    if (!isClosed && !isFull) return true;
+    const reasons = [
+      isClosed && '신청이 마감(조 편성 완료)된 산행입니다.',
+      isFull && `정원(${event.maxParticipants}명)을 초과합니다.`,
+    ].filter(Boolean).join('\n');
+    return confirm(`${reasons}\n\n그래도 등록하시겠습니까?`);
+  };
+
+  const handleRegisterMember = async () => {
+    if (!registerEvent || !selectedMemberForRegister) return;
+    if (isMemberAlreadyRegistered(selectedMemberForRegister.id)) {
+      alert('이미 이 산행에 신청된 회원입니다.');
+      return;
+    }
+    if (!confirmOverbookingIfNeeded(registerEvent)) return;
+
+    setIsRegisteringParticipant(true);
+    try {
+      const participation = await addParticipation({
+        eventId: registerEvent.id,
+        userId: selectedMemberForRegister.id,
+        userName: selectedMemberForRegister.name,
+        userEmail: selectedMemberForRegister.email || '',
+        userPhone: selectedMemberForRegister.phoneNumber || '',
+        userCompany: selectedMemberForRegister.company || '',
+        userPosition: selectedMemberForRegister.position || '',
+        status: 'pending',
+        paymentStatus: 'pending',
+        isGuest: false,
+      });
+
+      let paymentCreationFailed = false;
+      try {
+        await createPaymentForParticipation({
+          id: participation.id,
+          eventId: registerEvent.id,
+          userId: selectedMemberForRegister.id,
+          userName: selectedMemberForRegister.name,
+          userEmail: selectedMemberForRegister.email || '',
+          userPhone: selectedMemberForRegister.phoneNumber || '',
+          userCompany: selectedMemberForRegister.company || '',
+          userPosition: selectedMemberForRegister.position || '',
+          isGuest: false,
+        }, registerEvent.paymentInfo?.cost || registerEvent.cost);
+      } catch (paymentErr) {
+        paymentCreationFailed = true;
+        console.warn('결제 레코드 생성 실패 (참가 신청은 완료됨):', paymentErr);
+      }
+
+      alert(
+        `${selectedMemberForRegister.name}님이 등록되었습니다.` +
+        (paymentCreationFailed ? '\n\n⚠️ 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.' : '')
+      );
+      closeRegisterModal();
+    } catch (err: any) {
+      alert(`등록 실패: ${err.message || '다시 시도해주세요.'}`);
+    } finally {
+      setIsRegisteringParticipant(false);
+    }
+  };
+
+  const validateGuestRegisterForm = () => {
+    const errors: Record<string, string> = {};
+    if (!guestRegisterForm.name.trim()) errors.name = '이름을 입력해주세요.';
+    const normalizedPhone = removePhoneNumberHyphens(guestRegisterForm.phoneNumber);
+    if (!normalizedPhone.trim()) {
+      errors.phoneNumber = '전화번호를 입력해주세요.';
+    } else if (!/^\d{3}-\d{3,4}-\d{4}$/.test(guestRegisterForm.phoneNumber)) {
+      errors.phoneNumber = '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)';
+    }
+    if (!guestRegisterForm.company.trim()) errors.company = '소속(회사명)을 입력해주세요.';
+    if (!guestRegisterForm.position.trim()) errors.position = '직책을 입력해주세요.';
+    setGuestRegisterErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleRegisterGuest = async () => {
+    if (!registerEvent) return;
+    if (!validateGuestRegisterForm()) return;
+
+    const normalizedPhone = removePhoneNumberHyphens(guestRegisterForm.phoneNumber);
+    const trimmedName = guestRegisterForm.name.trim();
+
+    // 전화번호 기준 중복 등록 방지 (게스트는 매번 새 userId가 생성되어 addParticipation의
+    // userId+eventId 중복검사로는 걸러지지 않음 — 더블클릭/중복입력 방지를 위해 별도 체크)
+    const alreadyRegisteredGuest = registerEventParticipations.some(
+      p => p.isGuest && p.status !== 'cancelled' && p.userPhone && removePhoneNumberHyphens(p.userPhone) === normalizedPhone
+    );
+    if (alreadyRegisteredGuest) {
+      alert('이미 이 전화번호로 게스트 등록이 되어 있습니다.');
+      return;
+    }
+
+    if (!confirmOverbookingIfNeeded(registerEvent)) return;
+
+    // 실제 로그인 없이 운영진이 대리 등록하는 게스트 — 실제 Firebase Auth UID와 겹치지 않는 고유 ID 부여
+    const guestUserId = `admin_guest_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    setIsRegisteringParticipant(true);
+    try {
+      const participation = await addParticipation({
+        eventId: registerEvent.id,
+        userId: guestUserId,
+        userName: trimmedName,
+        userEmail: '',
+        userPhone: normalizedPhone,
+        userCompany: guestRegisterForm.company.trim(),
+        userPosition: guestRegisterForm.position.trim(),
+        status: 'pending',
+        paymentStatus: 'pending',
+        isGuest: true,
+      });
+
+      let paymentCreationFailed = false;
+      try {
+        await createPaymentForParticipation({
+          id: participation.id,
+          eventId: registerEvent.id,
+          userId: guestUserId,
+          userName: trimmedName,
+          userEmail: '',
+          userPhone: normalizedPhone,
+          userCompany: guestRegisterForm.company.trim(),
+          userPosition: guestRegisterForm.position.trim(),
+          isGuest: true,
+        }, registerEvent.paymentInfo?.cost || registerEvent.cost);
+      } catch (paymentErr) {
+        paymentCreationFailed = true;
+        console.warn('결제 레코드 생성 실패 (참가 신청은 완료됨):', paymentErr);
+      }
+
+      try {
+        await addGuestApplication({
+          userId: guestUserId,
+          name: trimmedName,
+          email: '',
+          phoneNumber: normalizedPhone,
+          company: guestRegisterForm.company.trim(),
+          position: guestRegisterForm.position.trim(),
+          eventId: registerEvent.id,
+          eventTitle: registerEvent.title,
+          eventDate: registerEvent.date,
+        });
+      } catch (guestErr) {
+        console.warn('게스트 신청 기록 생성 실패 (참여 신청은 완료):', guestErr);
+      }
+
+      alert(
+        `${trimmedName}님(게스트)이 등록되었습니다.` +
+        (paymentCreationFailed ? '\n\n⚠️ 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.' : '')
+      );
+      closeRegisterModal();
+    } catch (err: any) {
+      alert(`등록 실패: ${err.message || '다시 시도해주세요.'}`);
+    } finally {
+      setIsRegisteringParticipant(false);
+    }
+  };
 
   // 10분 단위 시간 옵션 생성 (오전 04시 ~ 21시)
   const generateTimeOptions = () => {
@@ -2377,6 +2580,13 @@ const EventManagement = () => {
                               프린트
                             </button>
                             <button
+                              onClick={() => setRegisterEvent(event)}
+                              className="px-2.5 py-1.5 text-xs sm:text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5"
+                            >
+                              <UserPlus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                              참가자 추가
+                            </button>
+                            <button
                               onClick={() => handleEdit(event)}
                               className="px-2.5 py-1.5 text-xs sm:text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center gap-1 sm:gap-1.5"
                             >
@@ -2413,6 +2623,166 @@ const EventManagement = () => {
               )}
             </div>
           )}
+
+      {/* 참가자 추가 모달 (운영진 대리 신청) */}
+      {registerEvent && (
+        <Modal onClose={closeRegisterModal} title="참가자 추가" maxWidth="max-w-xl">
+          <div className="p-6">
+            <p className="text-sm text-slate-500 mb-4">
+              <span className="font-semibold text-slate-700">{registerEvent.title}</span> ({registerEvent.date})
+            </p>
+
+            {/* 탭 */}
+            <div className="flex gap-2 mb-5 p-1 bg-slate-100 rounded-xl">
+              <button
+                onClick={() => setRegisterTab('member')}
+                className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                  registerTab === 'member' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                회원 검색
+              </button>
+              <button
+                onClick={() => setRegisterTab('guest')}
+                className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                  registerTab === 'guest' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                게스트 추가
+              </button>
+            </div>
+
+            {registerTab === 'member' ? (
+              <div>
+                <div className="relative mb-3">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={registerMemberSearchQuery}
+                    onChange={(e) => { setRegisterMemberSearchQuery(e.target.value); setSelectedMemberForRegister(null); }}
+                    placeholder="이름, 회사, 직책으로 검색"
+                    className="input-field pl-10"
+                    autoFocus
+                  />
+                </div>
+
+                {selectedMemberForRegister ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-900">{selectedMemberForRegister.name}</p>
+                      <p className="text-sm text-slate-600">
+                        {[selectedMemberForRegister.company, selectedMemberForRegister.position].filter(Boolean).join(' / ') || '소속/직책 미등록'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedMemberForRegister(null)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-white rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : registerMemberSearchQuery.trim() ? (
+                  <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+                    {memberSearchResults.length === 0 ? (
+                      <p className="text-center text-sm text-slate-400 py-6">검색 결과가 없습니다.</p>
+                    ) : (
+                      memberSearchResults.map(member => {
+                        const alreadyRegistered = isMemberAlreadyRegistered(member.id);
+                        return (
+                          <button
+                            key={member.id}
+                            disabled={alreadyRegistered}
+                            onClick={() => setSelectedMemberForRegister(member)}
+                            className={`w-full p-3 text-left rounded-lg border transition-colors ${
+                              alreadyRegistered
+                                ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed'
+                                : 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-900">{member.name}</p>
+                                <p className="text-xs text-slate-500">
+                                  {[member.company, member.position].filter(Boolean).join(' / ') || '소속/직책 미등록'}
+                                </p>
+                              </div>
+                              {alreadyRegistered && <Badge variant="default">이미 신청됨</Badge>}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={handleRegisterMember}
+                  disabled={!selectedMemberForRegister || isRegisteringParticipant}
+                  className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRegisteringParticipant ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  등록하기
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1.5 text-sm">이름 *</label>
+                  <input
+                    type="text"
+                    value={guestRegisterForm.name}
+                    onChange={(e) => setGuestRegisterForm(prev => ({ ...prev, name: e.target.value }))}
+                    className={`input-field ${guestRegisterErrors.name ? 'border-red-400' : ''}`}
+                    placeholder="홍길동"
+                  />
+                  {guestRegisterErrors.name && <p className="text-xs text-red-500 mt-1">{guestRegisterErrors.name}</p>}
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1.5 text-sm">전화번호 *</label>
+                  <input
+                    type="tel"
+                    value={guestRegisterForm.phoneNumber}
+                    onChange={(e) => setGuestRegisterForm(prev => ({ ...prev, phoneNumber: formatPhoneNumberInput(e.target.value) }))}
+                    className={`input-field ${guestRegisterErrors.phoneNumber ? 'border-red-400' : ''}`}
+                    placeholder="010-1234-5678"
+                  />
+                  {guestRegisterErrors.phoneNumber && <p className="text-xs text-red-500 mt-1">{guestRegisterErrors.phoneNumber}</p>}
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1.5 text-sm">소속 (회사명) *</label>
+                  <input
+                    type="text"
+                    value={guestRegisterForm.company}
+                    onChange={(e) => setGuestRegisterForm(prev => ({ ...prev, company: e.target.value }))}
+                    className={`input-field ${guestRegisterErrors.company ? 'border-red-400' : ''}`}
+                    placeholder="예: 삼성전자, 프리랜서, 자영업 등"
+                  />
+                  {guestRegisterErrors.company && <p className="text-xs text-red-500 mt-1">{guestRegisterErrors.company}</p>}
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-semibold mb-1.5 text-sm">직책 *</label>
+                  <input
+                    type="text"
+                    value={guestRegisterForm.position}
+                    onChange={(e) => setGuestRegisterForm(prev => ({ ...prev, position: e.target.value }))}
+                    className={`input-field ${guestRegisterErrors.position ? 'border-red-400' : ''}`}
+                    placeholder="예: 부장, 이사, 대표 등"
+                  />
+                  {guestRegisterErrors.position && <p className="text-xs text-red-500 mt-1">{guestRegisterErrors.position}</p>}
+                </div>
+                <button
+                  onClick={handleRegisterGuest}
+                  disabled={isRegisteringParticipant}
+                  className="w-full btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRegisteringParticipant ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  게스트로 등록하기
+                </button>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
       </>
       
       

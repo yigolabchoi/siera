@@ -9,7 +9,7 @@ interface ParticipationContextType {
   participations: Participation[];
   isLoading: boolean;
   error: string | null;
-  addParticipation: (participation: Omit<Participation, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addParticipation: (participation: Omit<Participation, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Participation>;
   updateParticipation: (id: string, participation: Partial<Participation>) => Promise<void>;
   deleteParticipation: (id: string) => Promise<void>;
   getParticipationById: (id: string) => Participation | undefined;
@@ -197,6 +197,7 @@ export const ParticipationProvider = ({ children }: { children: ReactNode }) => 
       const result = await setDocument('participations', id, participation);
       if (!result.success) throw new Error(result.error || '참가 신청 추가 실패');
       setParticipations(prev => [...prev, participation]);
+      return participation;
     } finally {
       addingRef.current = false;
     }
