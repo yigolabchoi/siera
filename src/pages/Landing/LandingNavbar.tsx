@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Menu, X, UserPlus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+// 입회신청 버튼 임시 비활성화 (게스트 산행 신청 플로우로 전환 준비 중)
+const SHOW_REGISTER_BUTTON = false;
+
 export const LandingNavbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -60,15 +63,17 @@ export const LandingNavbar: React.FC = () => {
         </div>
 
         {/* Desktop Action Button */}
-        <div className="hidden md:flex items-center">
-          <button 
-            onClick={() => navigate('/register')}
-            className={`px-6 py-2 text-xs font-bold uppercase tracking-wider border transition-all flex items-center gap-2 ${isScrolled ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-white bg-white text-slate-900 hover:bg-slate-100'}`}
-          >
-            <UserPlus className="w-4 h-4" />
-            입회신청
-          </button>
-        </div>
+        {SHOW_REGISTER_BUTTON && (
+          <div className="hidden md:flex items-center">
+            <button
+              onClick={() => navigate('/register')}
+              className={`px-6 py-2 text-xs font-bold uppercase tracking-wider border transition-all flex items-center gap-2 ${isScrolled ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-white bg-white text-slate-900 hover:bg-slate-100'}`}
+            >
+              <UserPlus className="w-4 h-4" />
+              입회신청
+            </button>
+          </div>
+        )}
 
         {/* Mobile Menu Toggle */}
         <button 
@@ -89,18 +94,20 @@ export const LandingNavbar: React.FC = () => {
         <button onClick={() => { scrollToSection('program'); setIsMobileMenuOpen(false); }} className="text-2xl font-light">프로그램</button>
         <button onClick={() => { scrollToSection('trust'); setIsMobileMenuOpen(false); }} className="text-2xl font-light">멤버십</button>
         <button onClick={() => { scrollToSection('faq'); setIsMobileMenuOpen(false); }} className="text-2xl font-light">FAQ</button>
-        <div className="flex flex-col gap-4 mt-8">
-          <button 
-            onClick={() => {
-              setIsMobileMenuOpen(false);
-              navigate('/register');
-            }} 
-            className="px-8 py-3 bg-white text-slate-900 text-sm font-bold tracking-widest uppercase flex items-center justify-center gap-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            입회신청하기
-          </button>
-        </div>
+        {SHOW_REGISTER_BUTTON && (
+          <div className="flex flex-col gap-4 mt-8">
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                navigate('/register');
+              }}
+              className="px-8 py-3 bg-white text-slate-900 text-sm font-bold tracking-widest uppercase flex items-center justify-center gap-2"
+            >
+              <UserPlus className="w-5 h-5" />
+              입회신청하기
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );
