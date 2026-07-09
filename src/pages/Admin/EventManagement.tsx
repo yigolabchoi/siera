@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit, Trash2, Calendar, MapPin, Users, Save, X, CreditCard, Phone, UserPlus, CheckCircle, AlertCircle, Lock, Unlock, Mountain, Printer, Clock, FileText, Undo, GripVertical, Search, ChevronDown, Camera, Upload, Loader2, Copy } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, MapPin, Users, Save, X, CreditCard, Phone, UserPlus, CheckCircle, AlertCircle, Lock, Unlock, Mountain, Printer, Clock, FileText, Undo, GripVertical, Search, ChevronDown, Camera, Upload, Loader2, Copy, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEvents } from '../../contexts/EventContext';
 import { useMembers } from '../../contexts/MemberContext';
@@ -222,6 +222,219 @@ const EventManagement = () => {
       alert(`등록 실패: ${err.message || '다시 시도해주세요.'}`);
     } finally {
       setIsRegisteringParticipant(false);
+    }
+  };
+
+  // ===== 산행 정보 엑셀 업로드 (파싱된 값을 등록/수정 폼에 그대로 채워넣음) =====
+  const [eventExcelFileInputKey, setEventExcelFileInputKey] = useState(0);
+  const [isParsingEventExcel, setIsParsingEventExcel] = useState(false);
+
+  const SCHEDULE_TYPE_ALIASES: Record<string, ScheduleItem['type']> = {
+    '출발': 'departure',
+    '정차': 'stop', '경유지': 'stop',
+    '입산': 'hiking_start', '산행시작': 'hiking_start',
+    '점심네트워킹': 'lunch_networking', '점심': 'lunch_networking', '네트워킹': 'lunch_networking', '점심겸네트워킹': 'lunch_networking',
+    '하산': 'hiking_end', '산행종료': 'hiking_end',
+    '복귀': 'return',
+    '도착': 'arrival',
+  };
+  const DIFFICULTY_VALUES = ['하', '중하', '중', '중상', '상'];
+  const normalizeExcelLabel = (s: string) => s.replace(/\s+/g, '').replace(/[:：/·,、]/g, '').trim();
+
+  const handleDownloadEventExcelTemplate = async () => {
+    const XLSX = await import('xlsx');
+    const data: any[][] = [
+      ['산 이름', '설악산'],
+      ['산 높이', '1708m'],
+      ['지역', '강원도 속초'],
+      ['산행 날짜', '2026-04-05'],
+      ['신청 마감일', '2026-03-29'],
+      ['정원', 40],
+      ['참가비', '50,000원'],
+      ['난이도', '중상'],
+      ['', ''],
+      ['A코스명', '정상 코스'],
+      ['A거리', '8.5km'],
+      ['A소요시간', '4시간'],
+      ['A난이도', '중상'],
+      ['A경로', '주차장 → 약수터 → 능선 → 정상 → 하산'],
+      ['', ''],
+      ['B코스명', '산책 코스'],
+      ['B거리', '4.2km'],
+      ['B소요시간', '2시간'],
+      ['B난이도', '하'],
+      ['B경로', '주차장 → 약수터 → 쉼터 → 하산'],
+      ['', ''],
+      ['은행명', '국민은행'],
+      ['계좌번호', '123456-78-901234'],
+      ['예금주', '홍길동'],
+      ['입금담당자', '홍길동'],
+      ['담당자연락처', '010-1234-5678'],
+      ['', ''],
+      ['비상연락처 이름', '홍길동'],
+      ['비상연락처 전화', '010-1234-5678'],
+      ['', ''],
+      ['산행 소개', '가을 단풍이 아름다운 설악산으로 함께 떠나요.'],
+      ['', ''],
+      ['시간', '장소 및 내용', '구분'],
+      ['07:15', '종합운동장역 집결, 버스 출발', '출발'],
+      ['10:00', '들머리 도착, 산행 시작', '입산'],
+      ['13:00', '점심 식사', '점심/네트워킹'],
+      ['15:00', '하산 완료', '하산'],
+      ['18:00', '서울 복귀 예정', '도착'],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 16 }, { wch: 40 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '산행정보');
+    XLSX.writeFile(wb, '산행정보_등록양식.xlsx');
+  };
+
+  const handleEventExcelFileSelected = async (file: File) => {
+    setIsParsingEventExcel(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) throw new Error('시트를 찾을 수 없습니다.');
+      const sheet = workbook.Sheets[firstSheetName];
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      // 1) key-value 섹션 파싱 + "당일 일정" 표 시작 위치 탐지
+      const kv = new Map<string, string>();
+      let scheduleStartIdx = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const c0 = normalizeExcelLabel(String(rows[i][0] ?? ''));
+        const c1raw = String(rows[i][1] ?? '');
+        if (c0 === '시간' && normalizeExcelLabel(c1raw).includes('장소')) {
+          scheduleStartIdx = i + 1;
+          break;
+        }
+        if (c0) kv.set(c0, String(rows[i][1] ?? '').trim());
+      }
+
+      const getVal = (...aliases: string[]) => {
+        for (const a of aliases) {
+          const v = kv.get(normalizeExcelLabel(a));
+          if (v) return v;
+        }
+        return '';
+      };
+
+      // 2) 기본 정보
+      const mountain = getVal('산 이름', '산이름');
+      const altitude = getVal('산 높이', '산높이');
+      const location = getVal('지역');
+      const date = getVal('산행 날짜', '산행날짜');
+      const applicationDeadline = getVal('신청 마감일', '신청마감일');
+      const maxParticipantsRaw = getVal('정원');
+      const costRaw = getVal('참가비');
+      const difficultyRaw = getVal('난이도');
+      const description = getVal('산행 소개', '산행소개');
+
+      if (!mountain) throw new Error('"산 이름"이 비어있습니다.');
+      if (!date) throw new Error('"산행 날짜"가 비어있습니다.');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('"산행 날짜" 형식이 올바르지 않습니다. (예: 2026-04-05)');
+      if (applicationDeadline && !/^\d{4}-\d{2}-\d{2}$/.test(applicationDeadline)) {
+        throw new Error('"신청 마감일" 형식이 올바르지 않습니다. (예: 2026-03-29)');
+      }
+
+      const maxParticipants = parseInt(maxParticipantsRaw.replace(/[^0-9]/g, ''), 10);
+      if (!maxParticipants || isNaN(maxParticipants)) throw new Error('"정원"이 올바르지 않습니다.');
+
+      const difficulty = DIFFICULTY_VALUES.includes(difficultyRaw) ? difficultyRaw : '중';
+
+      const costDigits = costRaw.replace(/[^0-9]/g, '');
+      const cost = costDigits ? `${parseInt(costDigits, 10).toLocaleString()}원` : '';
+
+      // 3) 코스 정보 (A/B, 있는 것만)
+      const courses: Course[] = [];
+      const aName = getVal('A코스명');
+      if (aName) {
+        const aDifficulty = getVal('A난이도');
+        courses.push({
+          id: 'course-a-' + Date.now(),
+          name: 'A조',
+          description: aName,
+          distance: getVal('A거리'),
+          duration: getVal('A소요시간'),
+          difficulty: (DIFFICULTY_VALUES.includes(aDifficulty) ? aDifficulty : difficulty) as any,
+          schedule: [{ time: '', location: getVal('A경로'), type: 'departure' }],
+        });
+      }
+      const bName = getVal('B코스명');
+      if (bName) {
+        const bDifficulty = getVal('B난이도');
+        courses.push({
+          id: 'course-b-' + Date.now(),
+          name: 'B조',
+          description: bName,
+          distance: getVal('B거리'),
+          duration: getVal('B소요시간'),
+          difficulty: (DIFFICULTY_VALUES.includes(bDifficulty) ? bDifficulty : difficulty) as any,
+          schedule: [{ time: '', location: getVal('B경로'), type: 'departure' }],
+        });
+      }
+
+      // 4) 입금 정보
+      const paymentInfo: Partial<PaymentInfo> = {
+        bankName: getVal('은행명'),
+        accountNumber: getVal('계좌번호'),
+        accountHolder: getVal('예금주'),
+        managerName: getVal('입금담당자'),
+        managerPhone: getVal('담당자연락처'),
+      };
+
+      // 5) 비상연락처
+      const emergencyContactName = getVal('비상연락처 이름', '비상연락처이름');
+      const emergencyContactPhone = getVal('비상연락처 전화', '비상연락처전화');
+
+      // 6) 당일 일정
+      const schedule: ScheduleItem[] = [];
+      if (scheduleStartIdx >= 0) {
+        for (let i = scheduleStartIdx; i < rows.length; i++) {
+          const time = String(rows[i][0] ?? '').trim();
+          const locationText = String(rows[i][1] ?? '').trim();
+          const typeRaw = normalizeExcelLabel(String(rows[i][2] ?? ''));
+          if (!time && !locationText) continue;
+          schedule.push({ time, location: locationText, type: SCHEDULE_TYPE_ALIASES[typeRaw] || 'stop' });
+        }
+      }
+
+      // 7) 등록/수정 폼(formData)에 그대로 채워넣기 — 제목/회차 자동생성 로직은 건드리지 않음
+      setFormData(prev => ({
+        ...prev,
+        mountain,
+        altitude,
+        location,
+        date,
+        applicationDeadline,
+        maxParticipants,
+        cost: cost || prev.cost,
+        difficulty: difficulty as any,
+        description: description || prev.description,
+        courses: courses.length > 0 ? courses : prev.courses,
+        paymentInfo: { ...prev.paymentInfo, ...paymentInfo, cost: cost || prev.paymentInfo?.cost || '' } as PaymentInfo,
+        emergencyContactName: emergencyContactName || prev.emergencyContactName,
+        emergencyContactPhone: emergencyContactPhone || prev.emergencyContactPhone,
+        schedule: schedule.length > 0 ? schedule : prev.schedule,
+      }));
+
+      if (!isEditing) {
+        setFormData(prev => ({
+          ...prev,
+          eventNumber: nextEventNumber,
+          title: generateEventTitle(nextEventNumber, prev.isSpecial ?? false, prev.specialType),
+        }));
+        setIsEditing(true);
+      }
+
+      setEventExcelFileInputKey(k => k + 1);
+    } catch (err: any) {
+      alert(`엑셀 읽기 실패: ${err.message || '파일을 확인해주세요.'}`);
+    } finally {
+      setIsParsingEventExcel(false);
     }
   };
 
@@ -1259,6 +1472,40 @@ const EventManagement = () => {
                 </>
               )}
             </button>
+
+            {eventRegistrationStatus.canAdd && (
+              <>
+                <label
+                  className={`flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-semibold text-sm transition-colors ${
+                    isParsingEventExcel
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer'
+                  }`}
+                >
+                  {isParsingEventExcel ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+                  <span>엑셀로 등록</span>
+                  <input
+                    key={eventExcelFileInputKey}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    disabled={isParsingEventExcel}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleEventExcelFileSelected(file);
+                    }}
+                  />
+                </label>
+                <button
+                  onClick={handleDownloadEventExcelTemplate}
+                  title="산행 정보 엑셀 템플릿 다운로드"
+                  className="flex items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-semibold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+              </>
+            )}
+
             {!eventRegistrationStatus.canAdd && (
               <div className="flex items-center gap-2 text-sm text-amber-600">
                 <AlertCircle className="h-4 w-4" />
