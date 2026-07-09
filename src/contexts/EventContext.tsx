@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
-import { collection, onSnapshot, getDocsFromServer } from 'firebase/firestore';
+import { collection, onSnapshot, getDocsFromServer, writeBatch, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase/config';
 import { HikingEvent, Participant, Team, TeamMember, Participation, EventWeather, User } from '../types';
 import { getDocuments, setDocument, updateDocument as firestoreUpdate, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
@@ -410,28 +410,29 @@ export const EventProvider = ({ children }: { children: ReactNode }) => {
 
   const setTeamsForEvent = useCallback(async (eventId: string, eventTeams: Team[]) => {
     try {
-      // 기존 조 중 제거된 것들의 Firestore 문서 삭제
+      // 기존 조 중 제거된 것들 + 현재 조 목록 저장을 하나의 배치로 원자적 처리
+      // (개별 순차 쓰기였을 때는 중간 실패 시 일부 팀만 반영되는 상태가 발생할 수 있었음)
       const existingTeams = teams[eventId] || [];
       const newTeamIds = new Set(eventTeams.map(t => t.id));
       const deletedTeams = existingTeams.filter(t => !newTeamIds.has(t.id));
 
-      for (const t of deletedTeams) {
-        const result = await deleteDocument('teams', t.id);
-        if (!result.success) {
-          console.error('[setTeamsForEvent] 팀 삭제 실패:', t.id, result.error);
-        }
-      }
+      const batch = writeBatch(db);
 
-      // 현재 조 목록 저장 (각 팀을 개별 문서로 저장)
-      for (const team of eventTeams) {
+      deletedTeams.forEach(t => {
+        batch.delete(doc(db, 'teams', t.id));
+      });
+
+      eventTeams.forEach(team => {
         // Firestore에 저장 불가한 undefined 값 제거
         const cleanTeam = JSON.parse(JSON.stringify({ ...team, eventId }));
-        const result = await setDocument('teams', team.id, cleanTeam);
-        if (!result.success) {
-          console.error('[setTeamsForEvent] 팀 저장 실패:', team.id, result.error);
-          throw new Error(`팀 저장 실패 (${team.name}): ${result.error}`);
-        }
-      }
+        batch.set(doc(db, 'teams', team.id), {
+          ...cleanTeam,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
 
       setTeams(prev => ({
         ...prev,
