@@ -390,9 +390,10 @@ const EventManagement = () => {
       const emergencyContactName = getVal('비상연락처 이름', '비상연락처이름');
       const emergencyContactPhone = getVal('비상연락처 전화', '비상연락처전화');
 
-      // 6) 당일 일정
+      // 6) 당일 일정 — 구분 값을 인식 못해도 업로드를 막지 않고, 시간/장소는 그대로 채운 뒤
+      // 폼의 '당일 일정'에서 해당 항목만 직접 확인하도록 안내(기본값은 '정차'로 채워둠)
       const schedule: ScheduleItem[] = [];
-      const invalidScheduleRows: string[] = [];
+      const uncertainScheduleRows: string[] = [];
       if (scheduleStartIdx >= 0) {
         for (let i = scheduleStartIdx; i < rows.length; i++) {
           const time = String(rows[i][0] ?? '').trim();
@@ -403,19 +404,11 @@ const EventManagement = () => {
 
           const type = SCHEDULE_TYPE_ALIASES[typeRaw];
           if (!type) {
-            invalidScheduleRows.push(`${i + 1}행 (${time || locationText}) — "${typeRawOriginal || '(빈 칸)'}"`);
-            continue;
+            uncertainScheduleRows.push(`${time || locationText} (엑셀 값: "${typeRawOriginal || '(빈 칸)'}")`);
           }
-          schedule.push({ time, location: locationText, type });
+          schedule.push({ time, location: locationText, type: type || 'stop' });
         }
       }
-      if (invalidScheduleRows.length > 0) {
-        throw new Error(
-          `"당일 일정"의 구분 값을 인식할 수 없습니다: ${invalidScheduleRows.join(', ')}\n` +
-          `허용되는 값: 출발 / 정차(경유지) / 입산(산행시작) / 점심/네트워킹 / 하산(산행종료) / 복귀 / 도착`
-        );
-      }
-
       // 7) 등록/수정 폼(formData)에 그대로 채워넣기 — 제목/회차 자동생성 로직은 건드리지 않음
       setFormData(prev => ({
         ...prev,
@@ -445,6 +438,15 @@ const EventManagement = () => {
       }
 
       setEventExcelFileInputKey(k => k + 1);
+
+      if (uncertainScheduleRows.length > 0) {
+        alert(
+          `엑셀 내용이 폼에 입력되었습니다.\n\n` +
+          `다만 "당일 일정" 중 아래 항목은 구분 값이 시스템과 달라 일단 "정차"로 채워졌습니다.\n` +
+          `아래에서 "당일 일정" 항목의 구분을 직접 확인·수정해주세요.\n\n` +
+          uncertainScheduleRows.join('\n')
+        );
+      }
     } catch (err: any) {
       alert(`엑셀 읽기 실패: ${err.message || '파일을 확인해주세요.'}`);
     } finally {
