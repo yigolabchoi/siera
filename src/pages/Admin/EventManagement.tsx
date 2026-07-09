@@ -1489,39 +1489,6 @@ const EventManagement = () => {
               )}
             </button>
 
-            {eventRegistrationStatus.canAdd && (
-              <>
-                <label
-                  className={`flex items-center gap-2 px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl font-semibold text-sm transition-colors ${
-                    isParsingEventExcel
-                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer'
-                  }`}
-                >
-                  {isParsingEventExcel ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
-                  <span>엑셀로 등록</span>
-                  <input
-                    key={eventExcelFileInputKey}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    className="hidden"
-                    disabled={isParsingEventExcel}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleEventExcelFileSelected(file);
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={handleDownloadEventExcelTemplate}
-                  title="산행 정보 엑셀 템플릿 다운로드"
-                  className="flex items-center gap-2 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-semibold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-              </>
-            )}
-
             {!eventRegistrationStatus.canAdd && (
               <div className="flex items-center gap-2 text-sm text-amber-600">
                 <AlertCircle className="h-4 w-4" />
@@ -1600,9 +1567,41 @@ const EventManagement = () => {
 
           {isEditing ? (
             <div className="card">
-              <h2 className="text-lg sm:text-2xl font-bold text-slate-900 mb-4 sm:mb-6">
-                {editingEvent ? '산행 수정' : '새 산행 등록'}
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-2xl font-bold text-slate-900">
+                  {editingEvent ? '산행 수정' : '새 산행 등록'}
+                </h2>
+                <div className="flex items-center gap-2">
+                  <label
+                    className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-colors ${
+                      isParsingEventExcel
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 cursor-pointer'
+                    }`}
+                  >
+                    {isParsingEventExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    <span>엑셀 업로드</span>
+                    <input
+                      key={eventExcelFileInputKey}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      disabled={isParsingEventExcel}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleEventExcelFileSelected(file);
+                      }}
+                    />
+                  </label>
+                  <button
+                    onClick={handleDownloadEventExcelTemplate}
+                    title="산행 정보 엑셀 템플릿 다운로드"
+                    className="flex items-center gap-2 px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-xl font-semibold text-sm bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
               <div className="space-y-4 sm:space-y-6">
                 {/* 특별산행 선택 */}
                 <div className="p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg sm:rounded-xl border-2 border-purple-200">
