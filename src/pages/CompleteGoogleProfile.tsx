@@ -105,11 +105,13 @@ const CompleteGoogleProfile = () => {
       newErrors.birthYear = '올바른 연도를 입력해주세요. (예: 1990)';
     }
 
-    // 게스트 산행 신청 시 회사 및 직책 필수
+    // 소속(회사명)은 회원가입/게스트 신청 공통 필수
+    if (!formData.company.trim()) {
+      newErrors.company = '소속(회사명)을 입력해주세요.';
+    }
+
+    // 게스트 산행 신청 시 직책도 필수
     if (guestEventId) {
-      if (!formData.company.trim()) {
-        newErrors.company = '소속(회사명)을 입력해주세요.';
-      }
       if (!formData.position.trim()) {
         newErrors.position = '직책을 입력해주세요.';
       }
@@ -794,7 +796,7 @@ const CompleteGoogleProfile = () => {
               <div className="space-y-5">
                 <div>
                   <label className="block text-white font-semibold mb-2 text-sm">
-                    소속 (회사명) {guestEventId && <span className="text-red-400">*</span>}
+                    소속 (회사명) <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="text"
@@ -881,6 +883,10 @@ const CompleteGoogleProfile = () => {
                     className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
                     placeholder="추천해주신 회원의 이름을 입력해주세요"
                   />
+                  <p className="mt-2 text-xs text-amber-400 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                    추천인이 있으신 경우 반드시 입력해주세요.
+                  </p>
                 </div>
 
                 <div>
