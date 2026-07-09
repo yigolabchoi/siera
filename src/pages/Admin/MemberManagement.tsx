@@ -3,6 +3,7 @@ import { sanitizeHtml } from '../../utils/sanitize';
 import { Users, Shield, UserCog, Search, UserCheck, UserPlus, Check, X, Eye, Calendar, Briefcase, Building2, Phone, Mail, Mountain, MessageSquare, AlertCircle, UserX, Power, Edit2, Save, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMembers } from '../../contexts/MemberContext';
+import { useGuestApplications } from '../../contexts/GuestApplicationContext';
 import { useExecutives, Executive } from '../../contexts/ExecutiveContext';
 import { useParticipations } from '../../contexts/ParticipationContext';
 import { useEvents } from '../../contexts/EventContext';
@@ -31,6 +32,7 @@ const MemberManagement = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { members, refreshMembers, updateMember } = useMembers(); // updateMember 추가
+  const { guestApplications } = useGuestApplications(); // 게스트 신청 이력 조회(레거시 백필용)
   const { executives, addExecutive, updateExecutive, deleteExecutive, isLoading: isExecutivesLoading } = useExecutives(); // 운영진 정보 추가
   const { participations, cancelParticipation, deleteParticipation } = useParticipations();
   const { getEventById } = useEvents();
@@ -889,6 +891,53 @@ const MemberManagement = () => {
     };
   }, [members, executiveMemberIds]);
 
+  // '가입 승인' 탭 제거 이전에 신청되어 아직 회원명부에 없는 게스트(레거시) — 한 번에 백필
+  const orphanedGuestApplications = useMemo(() => {
+    const memberIds = new Set(members.map(m => m.id));
+    const seen = new Set<string>();
+    const result = [];
+    for (const app of guestApplications) {
+      if (!app.userId || memberIds.has(app.userId) || seen.has(app.userId)) continue;
+      seen.add(app.userId);
+      result.push(app);
+    }
+    return result;
+  }, [guestApplications, members]);
+
+  const [isBackfillingGuests, setIsBackfillingGuests] = useState(false);
+
+  const handleBackfillLegacyGuests = async () => {
+    if (!confirm(`이전에 신청된 게스트 ${orphanedGuestApplications.length}명을 회원명부에 등록하시겠습니까?`)) return;
+    setIsBackfillingGuests(true);
+    let successCount = 0;
+    try {
+      for (const app of orphanedGuestApplications) {
+        if (!app.userId) continue;
+        const result = await setDocument('members', app.userId, {
+          id: app.userId,
+          name: app.name,
+          email: app.email || '',
+          phoneNumber: app.phoneNumber || app.phone || '',
+          company: app.company || '',
+          position: app.position || '',
+          role: 'guest' as const,
+          isApproved: true,
+          isActive: true,
+          joinDate: app.appliedAt ? app.appliedAt.split('T')[0] : new Date().toISOString().split('T')[0],
+          referredBy: app.referredBy || '',
+        });
+        if (result.success) successCount++;
+      }
+      await refreshMembers();
+      alert(`${successCount}명을 회원명부에 등록했습니다.`);
+    } catch (error) {
+      console.error('레거시 게스트 백필 실패:', error);
+      alert('일부 등록에 실패했습니다. 콘솔을 확인해주세요.');
+    } finally {
+      setIsBackfillingGuests(false);
+    }
+  };
+
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
       case 'chairman':
@@ -930,6 +979,26 @@ const MemberManagement = () => {
             <StatCard icon={<UserCog className="w-8 h-8" />} label="운영진" value={executives.length} unit="명" iconColor="text-purple-600" />
             <StatCard icon={<UserX className="w-8 h-8" />} label="비활성" value={memberStats.inactive} unit="명" iconColor="text-slate-500" />
           </div>
+
+          {/* 레거시 게스트 백필 안내 배너 (가입 승인 탭 제거 이전 신청 건) */}
+          {orphanedGuestApplications.length > 0 && (
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-amber-800">
+                  이전 방식(가입 승인 대기)으로 신청되어 아직 회원명부에 없는 게스트가{' '}
+                  <strong>{orphanedGuestApplications.length}명</strong> 있습니다. ({orphanedGuestApplications.map(a => a.name).join(', ')})
+                </p>
+              </div>
+              <button
+                onClick={handleBackfillLegacyGuests}
+                disabled={isBackfillingGuests}
+                className="shrink-0 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {isBackfillingGuests ? '등록 중...' : '회원명부에 등록'}
+              </button>
+            </div>
+          )}
 
           {/* Search and Filter */}
           <div className="space-y-6 mb-8">
