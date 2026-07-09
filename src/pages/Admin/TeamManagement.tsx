@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Save, X, Users, Shield, CheckCircle, Calendar, MapPin, AlertCircle, Copy, Check, Trash2, Lock, Search, Upload, Loader2, Download } from 'lucide-react';
+import { Plus, Edit, Save, X, Users, Shield, CheckCircle, Calendar, MapPin, AlertCircle, Copy, Check, Trash2, Lock, Search, Upload, Loader2, Download, UserPlus } from 'lucide-react';
 import { useEvents } from '../../contexts/EventContext';
 import { useMembers } from '../../contexts/MemberContext';
 import { usePayments } from '../../contexts/PaymentContext';
@@ -21,8 +21,8 @@ const TeamManagement = () => {
     updateEvent
   } = useEvents();
   const { members } = useMembers();
-  const { payments, getPaymentsByEvent } = usePayments();
-  const { participations, getParticipationsByEvent } = useParticipations();
+  const { payments, getPaymentsByEvent, createPaymentForParticipation } = usePayments();
+  const { participations, getParticipationsByEvent, addParticipation } = useParticipations();
   
   // 산행 목록 (오늘 이후만)
   const [events, setEvents] = useState<HikingEvent[]>([]);
@@ -428,6 +428,7 @@ const TeamManagement = () => {
       const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
+      const approvedMembers = members.filter(m => m.isApproved && m.isActive !== false);
 
       if (rawRows.length === 0) {
         throw new Error('엑셀에서 데이터를 찾을 수 없습니다. 템플릿 양식을 확인해주세요.');
@@ -462,8 +463,30 @@ const TeamManagement = () => {
             rowError = '조번호가 올바르지 않습니다 (1~10 사이 숫자).';
           }
 
-          const candidates = rowError ? [] : applicants.filter(a => a.name.trim() === name);
-          const matchStatus = rowError ? 'error' : candidates.length === 0 ? 'not_found' : candidates.length === 1 ? 'matched' : 'ambiguous';
+          const applicantCandidates = rowError ? [] : applicants.filter(a => a.name.trim() === name);
+
+          let matchStatus: string;
+          let candidates: any[];
+          let candidateSource: 'applicant' | 'member' | null;
+
+          if (rowError) {
+            matchStatus = 'error'; candidates = []; candidateSource = null;
+          } else if (applicantCandidates.length === 1) {
+            matchStatus = 'matched'; candidates = applicantCandidates; candidateSource = 'applicant';
+          } else if (applicantCandidates.length > 1) {
+            matchStatus = 'ambiguous'; candidates = applicantCandidates; candidateSource = 'applicant';
+          } else {
+            // 이 산행 신청자 명단엔 없지만, 클럽 회원 중에 이름이 일치하는 사람이 있는지 확인
+            // (있으면 적용 시 자동으로 이 산행에 신청 처리)
+            const memberCandidates = approvedMembers.filter(m => m.name.trim() === name);
+            if (memberCandidates.length === 1) {
+              matchStatus = 'member_pending'; candidates = memberCandidates; candidateSource = 'member';
+            } else if (memberCandidates.length > 1) {
+              matchStatus = 'member_ambiguous'; candidates = memberCandidates; candidateSource = 'member';
+            } else {
+              matchStatus = 'not_found'; candidates = []; candidateSource = null;
+            }
+          }
 
           parsedRows.push({
             rowIndex: parsedRows.length,
@@ -474,7 +497,8 @@ const TeamManagement = () => {
             rowError,
             matchStatus,
             candidates,
-            autoResolvedId: matchStatus === 'matched' ? candidates[0].id : null,
+            candidateSource,
+            autoResolvedId: (matchStatus === 'matched' || matchStatus === 'member_pending') ? candidates[0].id : null,
           });
         }
       }
@@ -492,9 +516,11 @@ const TeamManagement = () => {
   };
 
   // 각 행의 최종 배정 ID (매칭 자동 or 동명이인 수동 선택)
+  // 반환값은 candidateSource==='applicant'면 participationId, candidateSource==='member'면 memberId
+  // (member인 경우 실제 적용 시점에 신청이 먼저 생성되고 participationId로 치환됨 — handleApplyExcelTeams 참고)
   const getResolvedIdForRow = (row: any): string | null => {
-    if (row.matchStatus === 'matched') return row.autoResolvedId;
-    if (row.matchStatus === 'ambiguous') return excelAmbiguousSelections[row.rowIndex] || null;
+    if (row.matchStatus === 'matched' || row.matchStatus === 'member_pending') return row.autoResolvedId;
+    if (row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') return excelAmbiguousSelections[row.rowIndex] || null;
     return null;
   };
 
@@ -514,16 +540,18 @@ const TeamManagement = () => {
   // 전체 검증: 업로드 적용이 가능한 상태인지
   const excelValidation = (() => {
     if (excelRows.length === 0) {
-      return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'], notFoundRows: [], ambiguousRows: [], formatErrorRows: [] };
+      return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'], notFoundRows: [], ambiguousRows: [], formatErrorRows: [], pendingMemberRows: [] };
     }
     const issues: string[] = [];
 
-    // 신청자 명단에서 이름을 찾을 수 없는 행 — 오타이거나 이 산행에 신청되지 않은 사람
+    // 신청자 명단·회원 어디에도 없는 행 — 오타이거나 정말 등록되지 않은 사람 (적용 차단)
     const notFoundRows = excelRows.filter(r => r.matchStatus === 'not_found');
-    // 동명이인인데 아직 수동으로 선택되지 않은 행
-    const ambiguousRows = excelRows.filter(r => r.matchStatus === 'ambiguous' && !getResolvedIdForRow(r));
-    // 조번호/이름 형식 자체가 잘못된 행
+    // 동명이인인데 아직 수동으로 선택되지 않은 행 (신청자 동명이인 + 회원 동명이인 모두 포함, 적용 차단)
+    const ambiguousRows = excelRows.filter(r => (r.matchStatus === 'ambiguous' || r.matchStatus === 'member_ambiguous') && !getResolvedIdForRow(r));
+    // 조번호/이름 형식 자체가 잘못된 행 (적용 차단)
     const formatErrorRows = excelRows.filter(r => r.matchStatus === 'error');
+    // 회원이지만 이 산행에 아직 신청 안 된 사람 — 차단하지 않고 적용 시 자동으로 산행 신청 처리
+    const pendingMemberRows = excelRows.filter(r => r.matchStatus === 'member_pending' || (r.matchStatus === 'member_ambiguous' && getResolvedIdForRow(r)));
 
     // 중복 배정 (같은 사람이 여러 조/행에 등장)
     const idLocations = new Map<string, string[]>();
@@ -558,22 +586,94 @@ const TeamManagement = () => {
       notFoundRows,
       ambiguousRows,
       formatErrorRows,
+      pendingMemberRows,
     };
   })();
 
   // 엑셀 업로드 결과를 실제 조편성에 적용
   const handleApplyExcelTeams = async () => {
     if (!excelValidation.isValid) return;
-    if (!confirm(`엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.`)) return;
+
+    const autoRegisterCount = excelValidation.pendingMemberRows.length;
+    const confirmMsg = autoRegisterCount > 0
+      ? `엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.\n` +
+        `(이 중 ${autoRegisterCount}명은 아직 이 산행에 신청되지 않은 회원으로, 자동으로 산행 신청 처리됩니다.)`
+      : `엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.`;
+    if (!confirm(confirmMsg)) return;
 
     setIsApplyingExcelTeams(true);
     try {
+      const selectedEvent = events.find(e => e.id === selectedEventIdForTeam);
+      const eventParticipations = getParticipationsByEvent(selectedEventIdForTeam);
+      const isAlreadyRegistered = (memberId: string) =>
+        eventParticipations.some(p => p.userId === memberId && p.status !== 'cancelled');
+
+      // 1. 회원이지만 이 산행에 아직 신청되지 않은 사람 먼저 자동 등록 (중복 인물은 1회만)
+      const memberIdsToRegister = [...new Set(
+        excelRows
+          .filter(r => r.candidateSource === 'member')
+          .map(r => getResolvedIdForRow(r))
+          .filter((id): id is string => !!id && !isAlreadyRegistered(id))
+      )];
+
+      const newParticipationIdByMemberId = new Map<string, string>();
+      let paymentCreationFailedCount = 0;
+
+      for (const memberId of memberIdsToRegister) {
+        const member = members.find(m => m.id === memberId);
+        if (!member) continue;
+        const participation = await addParticipation({
+          eventId: selectedEventIdForTeam,
+          userId: member.id,
+          userName: member.name,
+          userEmail: member.email || '',
+          userPhone: member.phoneNumber || '',
+          userCompany: member.company || '',
+          userPosition: member.position || '',
+          status: 'pending',
+          paymentStatus: 'pending',
+          isGuest: false,
+        });
+        newParticipationIdByMemberId.set(memberId, participation.id);
+
+        try {
+          await createPaymentForParticipation({
+            id: participation.id,
+            eventId: selectedEventIdForTeam,
+            userId: member.id,
+            userName: member.name,
+            userEmail: member.email || '',
+            userPhone: member.phoneNumber || '',
+            userCompany: member.company || '',
+            userPosition: member.position || '',
+            isGuest: false,
+          }, selectedEvent?.paymentInfo?.cost || selectedEvent?.cost);
+        } catch (paymentErr) {
+          paymentCreationFailedCount++;
+          console.warn('결제 레코드 생성 실패 (참가 신청은 완료됨):', memberId, paymentErr);
+        }
+      }
+
+      // 회원 자동등록 이후 최신 신청자 목록 재조회 (방금 등록된 사람 포함)
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
       const findApplicant = (id: string) => applicants.find(a => a.id === id);
 
+      // 각 행의 최종 participationId 계산 (member 출처는 방금 생성했거나 이미 있던 participationId로 치환)
+      const resolveFinalId = (row: any): string | null => {
+        const id = getResolvedIdForRow(row);
+        if (!id) return null;
+        if (row.candidateSource === 'member') {
+          if (newParticipationIdByMemberId.has(id)) return newParticipationIdByMemberId.get(id)!;
+          const existing = eventParticipations.find(p => p.userId === id && p.status !== 'cancelled');
+          return existing ? existing.id : null;
+        }
+        return id;
+      };
+
       // 미리보기 확인 중(동명이인 선택 등) 신청 취소/환불 등으로 대상자가 바뀌었는지 재검증
-      // — 조용히 누락시키지 않고 명확히 중단
+      // — 조용히 누락시키지 않고 명확히 중단 (방금 자동등록한 회원은 이미 반영되어 있으므로 제외)
       const staleRows = excelRows.filter(r => {
+        if (r.candidateSource === 'member') return false; // 방금 처리했거나 처리 대상이 아님
         const id = getResolvedIdForRow(r);
         return id && !findApplicant(id);
       });
@@ -588,7 +688,7 @@ const TeamManagement = () => {
       // 참가자 id → 목표 조번호 매핑
       const assignmentMap = new Map<string, number>();
       excelRows.forEach(r => {
-        const id = getResolvedIdForRow(r);
+        const id = resolveFinalId(r);
         if (id) assignmentMap.set(id, r.teamNumber);
       });
 
@@ -625,7 +725,7 @@ const TeamManagement = () => {
         }
 
         const leaderRow = group.leaderRows[0];
-        const leaderId = getResolvedIdForRow(leaderRow);
+        const leaderId = resolveFinalId(leaderRow);
         const leaderApplicant = leaderId ? findApplicant(leaderId) : null;
         if (leaderApplicant) {
           team.leaderId = leaderApplicant.id;
@@ -633,11 +733,12 @@ const TeamManagement = () => {
           team.leaderCompany = leaderApplicant.company;
           team.leaderPosition = leaderApplicant.position;
           team.leaderOccupation = [leaderApplicant.company, leaderApplicant.position].filter(Boolean).join(' ');
+          team.leaderIsGuest = leaderApplicant.isGuest || false;
         }
 
         team.members = group.memberRows
           .map(r => {
-            const id = getResolvedIdForRow(r);
+            const id = resolveFinalId(r);
             const applicant = id ? findApplicant(id) : null;
             if (!applicant) return null;
             // 수동으로 조원을 추가할 때(handleAddMember)와 동일하게 신청자 전체 정보를 저장
@@ -649,7 +750,11 @@ const TeamManagement = () => {
 
       setTeams(updatedTeams);
       await syncTeamsToContext(updatedTeams);
-      alert(`엑셀 업로드로 ${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정되었습니다.`);
+      alert(
+        `엑셀 업로드로 ${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정되었습니다.` +
+        (memberIdsToRegister.length > 0 ? `\n(${memberIdsToRegister.length}명 자동 산행 신청 처리됨)` : '') +
+        (paymentCreationFailedCount > 0 ? `\n\n⚠️ ${paymentCreationFailedCount}명의 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.` : '')
+      );
       closeExcelUploadModal();
     } catch (err: any) {
       setTeams(teams); // 롤백
@@ -732,6 +837,7 @@ const TeamManagement = () => {
         leaderCompany,
         leaderPosition,
         leaderOccupation: [leaderCompany, leaderPosition].filter(Boolean).join(' '),
+        leaderIsGuest: leaderParticipation?.isGuest ?? team.leaderIsGuest ?? false,
       };
     }
 
@@ -925,7 +1031,12 @@ const TeamManagement = () => {
                 {teamFormData.leaderId ? (
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
                     <div>
-                      <p className="font-bold text-slate-900">{teamFormData.leaderName}</p>
+                      <p className="font-bold text-slate-900">
+                        {teamFormData.leaderName}
+                        {teamFormData.leaderIsGuest && (
+                          <span className="ml-2 text-amber-600 font-bold">(G)</span>
+                        )}
+                      </p>
                       <p className="text-sm text-slate-600">
                         {teamFormData.leaderCompany && teamFormData.leaderPosition
                           ? `${teamFormData.leaderCompany} / ${teamFormData.leaderPosition}`
@@ -1188,7 +1299,12 @@ const TeamManagement = () => {
                                   <span className="text-sm font-bold text-blue-900">조장</span>
                                 </div>
                                 <div className="ml-7">
-                                  <p className="font-bold text-slate-900">{team.leaderName}</p>
+                                  <p className="font-bold text-slate-900">
+                                    {team.leaderName}
+                                    {team.leaderIsGuest && (
+                                      <span className="ml-2 text-amber-600 font-bold">(G)</span>
+                                    )}
+                                  </p>
                                   <p className="text-sm text-slate-600">
                                     {team.leaderCompany && team.leaderPosition
                                       ? `${team.leaderCompany} / ${team.leaderPosition}`
@@ -1626,6 +1742,24 @@ const TeamManagement = () => {
                     </div>
                   )}
 
+                  {excelValidation.pendingMemberRows.length > 0 && (
+                    <div className="p-4 bg-blue-50 border border-blue-300 rounded-xl">
+                      <p className="text-sm font-bold text-blue-900 mb-1.5 flex items-center gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        아직 이 산행에 신청되지 않은 회원 {excelValidation.pendingMemberRows.length}명
+                      </p>
+                      <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                        {excelValidation.pendingMemberRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-blue-700 mt-2">
+                        클럽 회원 명단과는 일치하지만 이 산행 신청자 명단엔 없는 사람입니다.
+                        "적용"을 누르면 이 산행에 자동으로 신청 처리된 뒤 조 편성됩니다.
+                      </p>
+                    </div>
+                  )}
+
                   {excelValidation.issues.length > 0 && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <p className="text-sm font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
@@ -1654,7 +1788,8 @@ const TeamManagement = () => {
                                 <div key={row.rowIndex} className="px-4 py-2.5 flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-2 min-w-0">
                                     {row.matchStatus === 'matched' && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                                    {row.matchStatus === 'ambiguous' && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                                    {row.matchStatus === 'member_pending' && <UserPlus className="w-4 h-4 text-blue-500 flex-shrink-0" />}
                                     {(row.matchStatus === 'not_found' || row.matchStatus === 'error') && <X className="w-4 h-4 text-red-500 flex-shrink-0" />}
                                     <span className="font-semibold text-slate-900 truncate">
                                       {row.name || `(${row.excelRowNumber}행)`}
@@ -1668,20 +1803,27 @@ const TeamManagement = () => {
                                         {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || '매칭됨'}
                                       </span>
                                     )}
+                                    {row.matchStatus === 'member_pending' && (
+                                      <span className="text-xs text-blue-600">
+                                        회원 · {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || ''} (자동 신청됨)
+                                      </span>
+                                    )}
                                     {row.matchStatus === 'not_found' && (
                                       <span className="text-xs text-red-600">신청자 목록에서 찾을 수 없음</span>
                                     )}
                                     {row.matchStatus === 'error' && (
                                       <span className="text-xs text-red-600">{row.rowError}</span>
                                     )}
-                                    {row.matchStatus === 'ambiguous' && (
+                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') && (
                                       <select
                                         value={resolvedId || ''}
                                         onChange={(e) => setExcelAmbiguousSelections(prev => ({ ...prev, [row.rowIndex]: e.target.value }))}
                                         className="text-xs border border-amber-300 rounded-lg px-2 py-1 bg-amber-50"
                                       >
-                                        <option value="">동명이인 {row.candidates.length}명 — 선택</option>
-                                        {row.candidates.map((c: TeamMember) => (
+                                        <option value="">
+                                          {row.matchStatus === 'member_ambiguous' ? '동명이인 회원' : '동명이인'} {row.candidates.length}명 — 선택
+                                        </option>
+                                        {row.candidates.map((c: any) => (
                                           <option key={c.id} value={c.id}>
                                             {[c.company, c.position].filter(Boolean).join(' / ') || c.id}
                                           </option>

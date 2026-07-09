@@ -228,6 +228,7 @@ export interface Team {
   leaderPosition?: string;
   leaderOccupation?: string; // Deprecated: Use leaderCompany instead
   leaderPhone?: string;
+  leaderIsGuest?: boolean; // 조장 게스트 여부
   members: TeamMember[];
 }
 
