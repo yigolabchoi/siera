@@ -972,7 +972,19 @@ const MemberManagement = () => {
             <StatCard icon={<UserCheck className="w-8 h-8" />} label="정회원" value={memberStats.member} unit="명" iconColor="text-emerald-600" />
             <StatCard icon={<UserPlus className="w-8 h-8" />} label="게스트" value={memberStats.guest} unit="명" iconColor="text-amber-600" />
             <StatCard icon={<UserCog className="w-8 h-8" />} label="운영진" value={executives.length} unit="명" iconColor="text-purple-600" />
-            <StatCard icon={<UserX className="w-8 h-8" />} label="비활성" value={memberStats.inactive} unit="명" iconColor="text-slate-500" />
+            <StatCard
+              icon={<UserX className="w-8 h-8" />}
+              label="비활성"
+              value={memberStats.inactive}
+              unit="명"
+              iconColor="text-slate-500"
+              onClick={() => {
+                setRoleFilter('all');
+                setStatusFilter('inactive');
+                setSearchTerm('');
+                document.getElementById('member-list-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+            />
           </div>
 
           {/* 레거시 게스트 백필 안내 배너 (가입 승인 탭 제거 이전 신청 건) */}
@@ -1044,7 +1056,7 @@ const MemberManagement = () => {
           </div>
 
       {/* Member List - 한줄 리스트 형태 */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div id="member-list-section" className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         {/* 테이블 헤더 (데스크톱) */}
         <div className="hidden sm:grid sm:grid-cols-[40px_1fr_80px_50px_130px_90px_90px] gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
           <span className="text-center">#</span>

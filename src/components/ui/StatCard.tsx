@@ -8,11 +8,15 @@ interface StatCardProps {
   unit?: string;
   iconColor?: string;
   className?: string;
+  onClick?: () => void;
 }
 
-const StatCard = ({ icon, label, value, unit = '', iconColor = 'text-slate-600', className = '' }: StatCardProps) => {
+const StatCard = ({ icon, label, value, unit = '', iconColor = 'text-slate-600', className = '', onClick }: StatCardProps) => {
   return (
-    <Card className={`!p-3 sm:!p-4 ${className}`}>
+    <Card
+      className={`!p-3 sm:!p-4 ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-primary-200 transition-all' : ''} ${className}`}
+      onClick={onClick}
+    >
       <div className="flex items-center gap-2 sm:gap-3">
         <div className={`flex-shrink-0 ${iconColor}`}>
           {icon}
