@@ -1248,6 +1248,24 @@ const MemberManagement = () => {
           <div className="text-center py-16">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-lg text-slate-500">해당하는 회원이 없습니다.</p>
+            {(roleFilter !== 'all' || statusFilter !== 'active' || searchTerm.trim()) && (
+              <div className="mt-3 space-y-2">
+                <p className="text-sm text-slate-400">
+                  적용된 필터:
+                  {' '}
+                  {{ all: '전체', chairman: '회장단', committee: '운영위원', member: '정회원', guest: '게스트' }[roleFilter] || roleFilter}
+                  {' · '}
+                  {statusFilter === 'inactive' ? '비활성' : '활성'}
+                  {searchTerm.trim() && ` · 검색어 "${searchTerm}"`}
+                </p>
+                <button
+                  onClick={() => { setRoleFilter('all'); setStatusFilter('active'); setSearchTerm(''); }}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-semibold underline"
+                >
+                  필터 초기화
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
