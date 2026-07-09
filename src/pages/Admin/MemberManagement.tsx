@@ -873,23 +873,18 @@ const MemberManagement = () => {
     currentPage * itemsPerPage
   );
 
-  const executiveMemberIds = useMemo(() => {
-    return new Set(executives.map(e => e.memberId).filter((id): id is string => !!id));
-  }, [executives]);
-
   const memberStats = useMemo(() => {
     // 병합된 계정 제외
     const nonMerged = members.filter(m => !(m as any).mergedInto);
-    const activeMembers = nonMerged.filter(m => m.isActive !== false && m.role !== 'guest');
-    const regularMembers = activeMembers.filter(m => !executiveMemberIds.has(m.id));
+    const activeAll = nonMerged.filter(m => m.isActive !== false);
     return {
-      total: activeMembers.length,
-      active: activeMembers.length,
+      total: activeAll.length, // 전체 회원 = 정회원+운영진+게스트(활성)
+      active: activeAll.length,
       inactive: nonMerged.filter(m => m.isActive === false).length,
-      member: regularMembers.length,
-      guest: nonMerged.filter(m => m.role === 'guest' && m.isActive !== false).length,
+      member: activeAll.filter(m => m.role !== 'guest').length, // 정회원 = 운영진 포함, 게스트 제외
+      guest: activeAll.filter(m => m.role === 'guest').length,
     };
-  }, [members, executiveMemberIds]);
+  }, [members]);
 
   // '가입 승인' 탭 제거 이전에 신청되어 아직 회원명부에 없는 게스트(레거시) — 한 번에 백필
   const orphanedGuestApplications = useMemo(() => {
