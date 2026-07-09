@@ -392,14 +392,28 @@ const EventManagement = () => {
 
       // 6) 당일 일정
       const schedule: ScheduleItem[] = [];
+      const invalidScheduleRows: string[] = [];
       if (scheduleStartIdx >= 0) {
         for (let i = scheduleStartIdx; i < rows.length; i++) {
           const time = String(rows[i][0] ?? '').trim();
           const locationText = String(rows[i][1] ?? '').trim();
-          const typeRaw = normalizeExcelLabel(String(rows[i][2] ?? ''));
+          const typeRawOriginal = String(rows[i][2] ?? '').trim();
+          const typeRaw = normalizeExcelLabel(typeRawOriginal);
           if (!time && !locationText) continue;
-          schedule.push({ time, location: locationText, type: SCHEDULE_TYPE_ALIASES[typeRaw] || 'stop' });
+
+          const type = SCHEDULE_TYPE_ALIASES[typeRaw];
+          if (!type) {
+            invalidScheduleRows.push(`${i + 1}행 (${time || locationText}) — "${typeRawOriginal || '(빈 칸)'}"`);
+            continue;
+          }
+          schedule.push({ time, location: locationText, type });
         }
+      }
+      if (invalidScheduleRows.length > 0) {
+        throw new Error(
+          `"당일 일정"의 구분 값을 인식할 수 없습니다: ${invalidScheduleRows.join(', ')}\n` +
+          `허용되는 값: 출발 / 정차(경유지) / 입산(산행시작) / 점심/네트워킹 / 하산(산행종료) / 복귀 / 도착`
+        );
       }
 
       // 7) 등록/수정 폼(formData)에 그대로 채워넣기 — 제목/회차 자동생성 로직은 건드리지 않음
