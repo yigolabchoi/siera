@@ -513,14 +513,17 @@ const TeamManagement = () => {
 
   // 전체 검증: 업로드 적용이 가능한 상태인지
   const excelValidation = (() => {
-    if (excelRows.length === 0) return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'] };
+    if (excelRows.length === 0) {
+      return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'], notFoundRows: [], ambiguousRows: [], formatErrorRows: [] };
+    }
     const issues: string[] = [];
 
-    // 행 단위 미해결 항목
-    const unresolvedRows = excelRows.filter(r => r.matchStatus === 'error' || r.matchStatus === 'not_found' || (r.matchStatus === 'ambiguous' && !getResolvedIdForRow(r)));
-    if (unresolvedRows.length > 0) {
-      issues.push(`${unresolvedRows.length}개 행이 아직 해결되지 않았습니다.`);
-    }
+    // 신청자 명단에서 이름을 찾을 수 없는 행 — 오타이거나 이 산행에 신청되지 않은 사람
+    const notFoundRows = excelRows.filter(r => r.matchStatus === 'not_found');
+    // 동명이인인데 아직 수동으로 선택되지 않은 행
+    const ambiguousRows = excelRows.filter(r => r.matchStatus === 'ambiguous' && !getResolvedIdForRow(r));
+    // 조번호/이름 형식 자체가 잘못된 행
+    const formatErrorRows = excelRows.filter(r => r.matchStatus === 'error');
 
     // 중복 배정 (같은 사람이 여러 조/행에 등장)
     const idLocations = new Map<string, string[]>();
@@ -549,7 +552,13 @@ const TeamManagement = () => {
       issues.push(`조는 최대 10개까지만 생성할 수 있습니다 (현재 ${totalTeamCount}개).`);
     }
 
-    return { isValid: issues.length === 0, issues };
+    return {
+      isValid: issues.length === 0 && notFoundRows.length === 0 && ambiguousRows.length === 0 && formatErrorRows.length === 0,
+      issues,
+      notFoundRows,
+      ambiguousRows,
+      formatErrorRows,
+    };
   })();
 
   // 엑셀 업로드 결과를 실제 조편성에 적용
@@ -1571,11 +1580,57 @@ const TeamManagement = () => {
 
               {excelRows.length > 0 && (
                 <>
+                  {excelValidation.notFoundRows.length > 0 && (
+                    <div className="p-4 bg-red-50 border border-red-300 rounded-xl">
+                      <p className="text-sm font-bold text-red-900 mb-1.5 flex items-center gap-1.5">
+                        <X className="w-4 h-4" />
+                        시스템(이 산행 신청자 명단)에 없는 이름 {excelValidation.notFoundRows.length}명
+                      </p>
+                      <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
+                        {excelValidation.notFoundRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-red-700 mt-2">
+                        오타이거나, 이 산행에 아직 참가 신청되지 않은 사람입니다. 엑셀의 이름을 수정하거나,
+                        먼저 "참가자 추가"로 해당 인원을 이 산행에 등록한 뒤 다시 업로드해주세요.
+                      </p>
+                    </div>
+                  )}
+
+                  {excelValidation.ambiguousRows.length > 0 && (
+                    <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl">
+                      <p className="text-sm font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" />
+                        동명이인 확인이 필요한 이름 {excelValidation.ambiguousRows.length}명
+                      </p>
+                      <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
+                        {excelValidation.ambiguousRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행) — 아래 목록에서 선택해주세요</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {excelValidation.formatErrorRows.length > 0 && (
+                    <div className="p-4 bg-red-50 border border-red-300 rounded-xl">
+                      <p className="text-sm font-bold text-red-900 mb-1.5 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" />
+                        형식 오류가 있는 행 {excelValidation.formatErrorRows.length}개
+                      </p>
+                      <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
+                        {excelValidation.formatErrorRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name || '(이름 없음)'} ({r.excelRowNumber}행) — {r.rowError}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   {excelValidation.issues.length > 0 && (
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
                       <p className="text-sm font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
                         <AlertCircle className="w-4 h-4" />
-                        확인이 필요합니다
+                        그 외 확인이 필요합니다
                       </p>
                       <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
                         {excelValidation.issues.map((issue, i) => <li key={i}>{issue}</li>)}
