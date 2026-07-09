@@ -3,21 +3,18 @@ import { sanitizeHtml } from '../../utils/sanitize';
 import { Users, Shield, UserCog, Search, UserCheck, UserPlus, Check, X, Eye, Calendar, Briefcase, Building2, Phone, Mail, Mountain, MessageSquare, AlertCircle, UserX, Power, Edit2, Save, Plus, Trash2, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMembers } from '../../contexts/MemberContext';
-import { usePendingUsers } from '../../contexts/PendingUserContext';
-import { useGuestApplications } from '../../contexts/GuestApplicationContext';
 import { useExecutives, Executive } from '../../contexts/ExecutiveContext';
 import { useParticipations } from '../../contexts/ParticipationContext';
 import { useEvents } from '../../contexts/EventContext';
 import { sortByPosition } from '../../utils/executiveOrder';
 import { useAuth } from '../../contexts/AuthContextEnhanced';
-import { GuestApplication } from '../../types';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import Tabs from '../../components/ui/Tabs';
 import StatCard from '../../components/ui/StatCard';
 import FilterGroup from '../../components/ui/FilterGroup';
-import { UserRole, PendingUser, Member } from '../../types';
+import { UserRole, Member } from '../../types';
 import { formatDate } from '../../utils/format';
 import { auth } from '../../lib/firebase/config';
 import { setDocument } from '../../lib/firebase/firestore';
@@ -35,20 +32,6 @@ const MemberManagement = () => {
   const { user } = useAuth();
   const { members, refreshMembers, updateMember } = useMembers(); // updateMember 추가
   const { executives, addExecutive, updateExecutive, deleteExecutive, isLoading: isExecutivesLoading } = useExecutives(); // 운영진 정보 추가
-  const { 
-    pendingUsers, 
-    approvePendingUser, 
-    rejectPendingUser,
-    refreshPendingUsers,
-    isLoading: isPendingLoading 
-  } = usePendingUsers();
-  const { 
-    guestApplications, 
-    approveGuestApplication, 
-    rejectGuestApplication,
-    refreshGuestApplications,
-    isLoading: isGuestLoading 
-  } = useGuestApplications();
   const { participations, cancelParticipation, deleteParticipation } = useParticipations();
   const { getEventById } = useEvents();
 
@@ -66,21 +49,11 @@ const MemberManagement = () => {
     }).length;
   }, [participations, getEventById]);
 
-  // 특정 사용자의 산행 참여 이력 조회 (취소 제외)
-  const getHikingHistory = useCallback((userId: string) => {
-    return participations
-      .filter(p => p.userId === userId && p.status !== 'cancelled')
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  }, [participations]);
-  
-  const [activeTab, setActiveTab] = useState<'members' | 'approval' | 'executives'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'executives'>('members');
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active');
-  const [approvalFilter, setApprovalFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
-  const [selectedPendingUser, setSelectedPendingUser] = useState<PendingUser | null>(null);
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  
+
   // 재인증 모달 상태
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [verifyAction, setVerifyAction] = useState<(() => void) | null>(null);
@@ -110,10 +83,6 @@ const MemberManagement = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const [guestFilter, setGuestFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
-  const [selectedGuestApplication, setSelectedGuestApplication] = useState<GuestApplication | null>(null);
-  const [isGuestDetailModalOpen, setIsGuestDetailModalOpen] = useState(false);
-
   // 운영진 관리 상태
   const [editingExecutiveId, setEditingExecutiveId] = useState<string | null>(null);
   const [editExecutiveForm, setEditExecutiveForm] = useState<Executive | null>(null);
@@ -139,9 +108,6 @@ const MemberManagement = () => {
   useEffect(() => {
     if (activeTab === 'members') {
       refreshMembers();
-    } else if (activeTab === 'approval') {
-      refreshPendingUsers();
-      refreshGuestApplications();
     } else if (activeTab === 'executives') {
       refreshMembers(); // 운영진 탭에서도 members 데이터 필요
     }
@@ -325,93 +291,6 @@ const MemberManagement = () => {
     setIsVerifying(false);
     setIsSendingCode(false);
     cleanupReauthSession();
-  };
-
-  const handleApprove = async (userId: string) => {
-    try {
-      await approvePendingUser(userId);
-      
-      // MemberContext 새로고침하여 회원 목록 업데이트
-      await refreshMembers();
-      
-      alert('회원가입이 승인되었습니다.\n회원 목록에서 확인하실 수 있습니다.');
-      setIsDetailModalOpen(false);
-    } catch (error: any) {
-      console.error('❌ 승인 실패:', error);
-      alert(`승인에 실패했습니다.\n\n${error.message || '다시 시도해주세요.'}`);
-    }
-  };
-
-  const handleReject = async (userId: string) => {
-    const reason = prompt('거절 사유를 입력해주세요 (선택):');
-    try {
-      await rejectPendingUser(userId, reason || undefined);
-      alert('회원가입이 거절되었습니다.');
-      setIsDetailModalOpen(false);
-    } catch (error) {
-      console.error('거절 실패:', error);
-      alert('거절 처리에 실패했습니다. 다시 시도해주세요.');
-    }
-  };
-
-  const handleViewDetail = (user: PendingUser) => {
-    setSelectedPendingUser(user);
-    setIsDetailModalOpen(true);
-  };
-
-  // 게스트 신청 처리 함수
-  const handleApproveGuest = async (applicationId: string) => {
-    try {
-      await approveGuestApplication(applicationId);
-      alert('게스트 신청이 승인되었습니다.');
-      setIsGuestDetailModalOpen(false);
-    } catch (error) {
-      console.error('게스트 승인 실패:', error);
-      alert('승인에 실패했습니다. 다시 시도해주세요.');
-    }
-  };
-
-  const handleRejectGuest = async (applicationId: string) => {
-    const reason = prompt('거절 사유를 입력해주세요 (선택):');
-    try {
-      // 1. 게스트 신청 거절 처리
-      const application = guestApplications.find(app => app.id === applicationId);
-      await rejectGuestApplication(applicationId, reason || undefined);
-
-      // 2. 관련 participation 삭제 (userId와 eventId로 매칭)
-      if (application?.userId && application?.eventId) {
-        const relatedParticipation = participations.find(
-          p => p.userId === application.userId && p.eventId === application.eventId
-        );
-        if (relatedParticipation) {
-          try {
-            await deleteParticipation(relatedParticipation.id);
-          } catch (err) {
-            console.warn('관련 참가 신청 삭제 실패 (게스트 거절은 완료):', err);
-          }
-        }
-      }
-
-      alert('게스트 신청이 거절되었습니다.');
-      setIsGuestDetailModalOpen(false);
-    } catch (error) {
-      console.error('게스트 거절 실패:', error);
-      alert('거절 처리에 실패했습니다. 다시 시도해주세요.');
-    }
-  };
-
-  const handleViewGuestDetail = (application: any) => {
-    setSelectedGuestApplication(application);
-    setIsGuestDetailModalOpen(true);
-  };
-
-  const getHikingLevelLabel = (level: string) => {
-    const labels: Record<string, string> = {
-      beginner: '초급',
-      intermediate: '중급',
-      advanced: '상급',
-    };
-    return labels[level] || level;
   };
 
   // ===== 운영진 관리 함수들 =====
@@ -992,11 +871,6 @@ const MemberManagement = () => {
     currentPage * itemsPerPage
   );
 
-  const filteredPendingUsers = pendingUsers.filter(user => {
-    if (approvalFilter === 'all') return true;
-    return user.status === approvalFilter;
-  });
-
   const executiveMemberIds = useMemo(() => {
     return new Set(executives.map(e => e.memberId).filter((id): id is string => !!id));
   }, [executives]);
@@ -1015,25 +889,6 @@ const MemberManagement = () => {
     };
   }, [members, executiveMemberIds]);
 
-  const approvalStats = {
-    pending: pendingUsers.filter(u => u.status === 'pending').length,
-    approved: pendingUsers.filter(u => u.status === 'approved').length,
-    rejected: pendingUsers.filter(u => u.status === 'rejected').length,
-    total: pendingUsers.length,
-  };
-
-  const guestStats = {
-    pending: guestApplications.filter(g => g.status === 'pending').length,
-    approved: guestApplications.filter(g => g.status === 'approved').length,
-    rejected: guestApplications.filter(g => g.status === 'rejected').length,
-    total: guestApplications.length,
-  };
-
-  const filteredGuestApplications = guestApplications.filter(app => {
-    if (guestFilter === 'all') return true;
-    return app.status === guestFilter;
-  });
-
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
       case 'chairman':
@@ -1051,26 +906,12 @@ const MemberManagement = () => {
     }
   };
 
-  const getStatusBadge = (status: PendingUser['status']) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="warning">승인대기</Badge>;
-      case 'approved':
-        return <Badge variant="success">승인완료</Badge>;
-      case 'rejected':
-        return <Badge variant="danger">거절됨</Badge>;
-      default:
-        return null;
-    }
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Tabs */}
       <Tabs
         tabs={[
           { key: 'members', label: '회원 관리', count: memberStats.total },
-          { key: 'approval', label: '가입 승인', count: (approvalStats.pending + guestStats.pending) > 0 ? (approvalStats.pending + guestStats.pending) : undefined },
           { key: 'executives', label: '운영진 관리', count: executives.length },
         ]}
         activeTab={activeTab}
@@ -1564,633 +1405,6 @@ const MemberManagement = () => {
         </Modal>
       )}
         </>
-      )}
-
-      {/* Approval Tab */}
-      {activeTab === 'approval' && (
-        <>
-          {/* 통합 Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
-            <StatCard icon={<UserPlus className="w-6 h-6 sm:w-8 sm:h-8" />} label="가입 대기" value={approvalStats.pending} unit="명" iconColor="text-amber-600" />
-            <StatCard icon={<Mountain className="w-6 h-6 sm:w-8 sm:h-8" />} label="게스트 대기" value={guestStats.pending} unit="명" iconColor="text-emerald-600" />
-            <StatCard icon={<Check className="w-6 h-6 sm:w-8 sm:h-8" />} label="승인완료" value={approvalStats.approved + guestStats.approved} unit="명" iconColor="text-blue-600" />
-            <StatCard icon={<Users className="w-6 h-6 sm:w-8 sm:h-8" />} label="전체 신청" value={approvalStats.total + guestStats.total} unit="명" iconColor="text-slate-600" />
-          </div>
-
-          {/* ===== 섹션 1: 회원 가입 신청 ===== */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-3 sm:mb-4">
-              <UserPlus className="w-5 h-5 text-amber-600" />
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">회원 가입 신청</h3>
-              {approvalStats.pending > 0 && (
-                <Badge variant="warning">{approvalStats.pending}건 대기</Badge>
-              )}
-            </div>
-
-            {/* Filter */}
-            <FilterGroup
-              options={[
-                { key: 'all', label: '전체' },
-                { key: 'pending', label: '승인대기', count: approvalStats.pending },
-                { key: 'approved', label: '승인완료' },
-                { key: 'rejected', label: '거절됨' },
-              ]}
-              selected={approvalFilter}
-              onChange={(key) => setApprovalFilter(key as typeof approvalFilter)}
-              size="sm"
-              className="mb-3 sm:mb-4"
-            />
-
-            {/* Pending User List */}
-            <div className="space-y-3 sm:space-y-4">
-              {isPendingLoading ? (
-                <Card className="text-center py-8 sm:py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-primary-600 mx-auto mb-3 sm:mb-4"></div>
-                  <p className="text-sm sm:text-base text-slate-600">로딩 중...</p>
-                </Card>
-              ) : filteredPendingUsers.length > 0 ? (
-                filteredPendingUsers.map(user => {
-                  const hikingCount = getHikingCount(user.id);
-                  return (
-                  <Card key={user.id} className="hover:shadow-lg transition-all">
-                    {/* 상단: 이름 + 배지 */}
-                    <div className="flex flex-wrap items-center gap-2 mb-2 sm:mb-3">
-                      <h3 className="text-base sm:text-xl font-bold text-slate-900">{user.name}</h3>
-                      {getStatusBadge(user.status)}
-                      {hikingCount > 0 && (
-                        <Badge variant="info">
-                          <span className="flex items-center gap-1">
-                            <Mountain className="w-3 h-3" />
-                            산행 {hikingCount}회
-                          </span>
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* 정보 */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 mb-3 sm:mb-4">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{user.email}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                        <span>{user.phoneNumber}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                        <span className="truncate">{user.occupation}</span>
-                      </div>
-                    </div>
-
-                    {/* 액션 버튼 */}
-                    <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
-                      {user.status === 'pending' && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(user.id)}
-                            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5"
-                          >
-                            <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            <span>승인</span>
-                          </button>
-                          <button
-                            onClick={() => handleReject(user.id)}
-                            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-red-600 border border-red-300 rounded-xl text-xs sm:text-sm font-semibold hover:bg-red-50 hover:border-red-400 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5"
-                          >
-                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                            <span>거절</span>
-                          </button>
-                        </>
-                      )}
-                      <button
-                        onClick={() => handleViewDetail(user)}
-                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-slate-700 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 hover:border-slate-400 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5 ml-auto"
-                      >
-                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                        <span>상세보기</span>
-                      </button>
-                    </div>
-                  </Card>
-                  );
-                })
-              ) : (
-                <Card className="text-center py-6 sm:py-8">
-                  <UserPlus className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2 text-slate-300" />
-                  <p className="text-sm text-slate-500">해당하는 가입 신청이 없습니다.</p>
-                </Card>
-              )}
-            </div>
-          </div>
-
-          {/* ===== 섹션 2: 게스트 산행 신청 ===== */}
-          <div>
-            <div className="flex items-center gap-2 mb-3 sm:mb-4">
-              <Mountain className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">게스트 산행 신청</h3>
-              {guestStats.pending > 0 && (
-                <Badge variant="success">{guestStats.pending}건 대기</Badge>
-              )}
-            </div>
-
-            {/* Guest Filter */}
-            <FilterGroup
-              options={[
-                { key: 'all', label: '전체' },
-                { key: 'pending', label: '대기', count: guestStats.pending },
-                { key: 'approved', label: '승인' },
-                { key: 'rejected', label: '거절' },
-              ]}
-              selected={guestFilter}
-              onChange={(key) => setGuestFilter(key as typeof guestFilter)}
-              size="sm"
-              className="mb-3 sm:mb-4"
-            />
-
-            {/* Guest Application List */}
-            <div className="space-y-3 sm:space-y-4">
-              {isGuestLoading ? (
-                <Card className="text-center py-8 sm:py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-emerald-600 mx-auto mb-3 sm:mb-4"></div>
-                  <p className="text-sm sm:text-base text-slate-600">로딩 중...</p>
-                </Card>
-              ) : filteredGuestApplications.length > 0 ? (
-                filteredGuestApplications.map(app => {
-                  const event = getEventById(app.eventId);
-                  const hikingCount = app.userId ? getHikingCount(app.userId) : 0;
-                  return (
-                    <Card key={app.id} className="hover:shadow-lg transition-all">
-                      {/* 상단: 이름 + 배지 */}
-                      <div className="flex flex-wrap items-center gap-2 mb-2 sm:mb-3">
-                        <h3 className="text-base sm:text-xl font-bold text-slate-900">{app.name}</h3>
-                        <Badge variant="warning">게스트</Badge>
-                        {app.status === 'pending' && <Badge variant="warning">대기</Badge>}
-                        {app.status === 'approved' && <Badge variant="success">승인</Badge>}
-                        {app.status === 'rejected' && <Badge variant="danger">거절</Badge>}
-                        {hikingCount > 0 && (
-                          <Badge variant="info">
-                            <span className="flex items-center gap-1">
-                              <Mountain className="w-3 h-3" />
-                              산행 {hikingCount}회
-                            </span>
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* 정보 */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-3 text-xs sm:text-sm text-slate-600 mb-2 sm:mb-3">
-                        {app.email && (
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                            <span className="truncate">{app.email}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                          <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                          <span>{app.phoneNumber || app.phone || '-'}</span>
-                        </div>
-                        {(app.company || app.position) && (
-                          <div className="flex items-center gap-1.5 sm:gap-2">
-                            <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                            <span className="truncate">{[app.company, app.position].filter(Boolean).join(' / ')}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 산행 정보 */}
-                      {event && (
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-3 sm:mb-4 p-2 bg-slate-50 rounded-lg">
-                          <Mountain className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                          <span className="font-medium text-slate-700">{event.title}</span>
-                          <span>·</span>
-                          <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                          <span>{formatDate(event.date)}</span>
-                        </div>
-                      )}
-                      {!event && app.eventTitle && (
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-3 sm:mb-4 p-2 bg-slate-50 rounded-lg">
-                          <Mountain className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                          <span className="font-medium text-slate-700">{app.eventTitle}</span>
-                          {app.eventDate && (
-                            <>
-                              <span>·</span>
-                              <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                              <span>{formatDate(app.eventDate)}</span>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {/* 신청일 */}
-                      <p className="text-[10px] sm:text-xs text-slate-400 mb-3">
-                        신청일: {formatDate(app.appliedAt)}
-                      </p>
-
-                      {/* 액션 버튼 */}
-                      <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
-                        {app.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleApproveGuest(app.id)}
-                              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-600 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5"
-                            >
-                              <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              <span>승인</span>
-                            </button>
-                            <button
-                              onClick={() => handleRejectGuest(app.id)}
-                              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-red-600 border border-red-300 rounded-xl text-xs sm:text-sm font-semibold hover:bg-red-50 hover:border-red-400 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5"
-                            >
-                              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                              <span>거절</span>
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => handleViewGuestDetail(app)}
-                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-slate-700 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-50 hover:border-slate-400 active:scale-[0.98] transition-all shadow-sm flex items-center gap-1.5 ml-auto"
-                        >
-                          <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                          <span>상세보기</span>
-                        </button>
-                      </div>
-                    </Card>
-                  );
-                })
-              ) : (
-                <Card className="text-center py-6 sm:py-8">
-                  <Mountain className="w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-2 text-slate-300" />
-                  <p className="text-sm text-slate-500">해당하는 게스트 신청이 없습니다.</p>
-                </Card>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Guest Application Detail Modal */}
-      {isGuestDetailModalOpen && selectedGuestApplication && (
-        <Modal
-          onClose={() => setIsGuestDetailModalOpen(false)}
-          title="게스트 신청 상세정보"
-          maxWidth="max-w-lg"
-        >
-          <div className="p-4 sm:p-6">
-            {/* 헤더 */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-5 sm:mb-6 pb-4 border-b border-slate-200">
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900">{selectedGuestApplication.name}</h3>
-              <Badge variant="warning">게스트</Badge>
-              {selectedGuestApplication.status === 'pending' && <Badge variant="warning">대기</Badge>}
-              {selectedGuestApplication.status === 'approved' && <Badge variant="success">승인</Badge>}
-              {selectedGuestApplication.status === 'rejected' && <Badge variant="danger">거절</Badge>}
-            </div>
-
-            <div className="space-y-5 sm:space-y-6">
-              {/* 기본 정보 */}
-              <div>
-                <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                  기본 정보
-                </h4>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4">
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">이름</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedGuestApplication.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">이메일</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium truncate">{selectedGuestApplication.email || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">연락처</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedGuestApplication.phoneNumber || selectedGuestApplication.phone || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">신청일</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{formatDate(selectedGuestApplication.appliedAt)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 직업 정보 */}
-              {(selectedGuestApplication.company || selectedGuestApplication.position) && (
-                <div>
-                  <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                    직업 정보
-                  </h4>
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4">
-                    <div>
-                      <p className="text-xs sm:text-sm text-slate-500 mb-0.5">소속</p>
-                      <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedGuestApplication.company || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs sm:text-sm text-slate-500 mb-0.5">직책</p>
-                      <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedGuestApplication.position || '-'}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 신청 산행 정보 */}
-              <div>
-                <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                  <Mountain className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500" />
-                  신청 산행
-                </h4>
-                <div className="bg-slate-50 rounded-xl p-3 sm:p-4">
-                  {(() => {
-                    const event = getEventById(selectedGuestApplication.eventId);
-                    return (
-                      <div className="space-y-2">
-                        <p className="text-sm sm:text-base font-bold text-slate-900">
-                          {event?.title || selectedGuestApplication.eventTitle || '-'}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{event?.date ? formatDate(event.date) : (selectedGuestApplication.eventDate ? formatDate(selectedGuestApplication.eventDate) : '-')}</span>
-                        </div>
-                        {event?.location && (
-                          <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
-                            <Mountain className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{event.location}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* 산행 참여 이력 */}
-              {selectedGuestApplication.userId && (() => {
-                const history = getHikingHistory(selectedGuestApplication.userId);
-                return history.length > 0 ? (
-                  <div>
-                    <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                      산행 참여 이력
-                      <Badge variant="info">{history.length}회</Badge>
-                    </h4>
-                    <div className="space-y-2">
-                      {history.map((p, idx) => {
-                        const evt = getEventById(p.eventId);
-                        return (
-                          <div key={p.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                              <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                {history.length - idx}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-slate-900 text-xs sm:text-sm truncate">
-                                  {evt?.title || `산행 (${p.eventId.slice(0, 8)})`}
-                                </p>
-                                <p className="text-[10px] sm:text-xs text-slate-500">
-                                  {evt?.date ? formatDate(evt.date) : '-'}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                              {p.isGuest && <Badge variant="warning">게스트</Badge>}
-                              {p.paymentStatus === 'completed' || p.paymentStatus === 'confirmed' ? (
-                                <Badge variant="success">입금</Badge>
-                              ) : (
-                                <Badge variant="default">미입금</Badge>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null;
-              })()}
-
-              {/* 계정 연동 안내 */}
-              {selectedGuestApplication.userId && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                  <div className="flex items-start gap-2.5">
-                    <Shield className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-blue-800">인증된 계정</p>
-                      <p className="text-[10px] sm:text-xs text-blue-600 mt-0.5">
-                        Firebase UID: {selectedGuestApplication.userId.slice(0, 16)}...
-                      </p>
-                      <p className="text-[10px] sm:text-xs text-blue-600 mt-0.5">
-                        정회원 전환 시 산행 이력이 자동 연동됩니다.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 액션 버튼 */}
-              {selectedGuestApplication.status === 'pending' && (
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-slate-200">
-                  <button
-                    onClick={() => handleRejectGuest(selectedGuestApplication.id)}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-red-600 border border-red-300 rounded-xl text-sm sm:text-base font-semibold hover:bg-red-50 hover:border-red-400 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    거절
-                  </button>
-                  <button
-                    onClick={() => handleApproveGuest(selectedGuestApplication.id)}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-xl text-sm sm:text-base font-semibold hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Check className="w-4 h-4" />
-                    승인
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Pending User Detail Modal */}
-      {isDetailModalOpen && selectedPendingUser && (
-        <Modal
-          onClose={() => setIsDetailModalOpen(false)}
-          title="가입 신청 상세정보"
-          maxWidth="max-w-4xl"
-        >
-          <div className="p-4 sm:p-6">
-            {/* 헤더: 이름 + 상태 배지 */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-5 sm:mb-6 pb-4 border-b border-slate-200">
-              <h3 className="text-xl sm:text-2xl font-bold text-slate-900">{selectedPendingUser.name}</h3>
-              {getStatusBadge(selectedPendingUser.status)}
-            </div>
-
-            <div className="space-y-5 sm:space-y-6">
-              {/* 기본 정보 */}
-              <div>
-                <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                  기본 정보
-                </h4>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4">
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">이름</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">이메일</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium truncate">{selectedPendingUser.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">전화번호</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.phoneNumber}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">성별</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">
-                      {selectedPendingUser.gender === 'male' ? '남성' : selectedPendingUser.gender === 'female' ? '여성' : '정보 없음'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">출생연도</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.birthYear || '정보 없음'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">신청일</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{formatDate(selectedPendingUser.appliedAt)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 직업 정보 */}
-              <div>
-                <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                  직업 정보
-                </h4>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4">
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">소속</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.company}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">직책</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.position}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 산행 정보 */}
-              <div>
-                <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                  <Mountain className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                  산행 정보
-                </h4>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-xl p-3 sm:p-4">
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">산행 능력</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{getHikingLevelLabel(selectedPendingUser.hikingLevel)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-slate-500 mb-0.5">추천인</p>
-                    <p className="text-sm sm:text-base text-slate-900 font-medium">{selectedPendingUser.referredBy || '최효준'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 산행 참여 이력 */}
-              {(() => {
-                const history = getHikingHistory(selectedPendingUser.id);
-                return (
-                  <div>
-                    <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                      산행 참여 이력
-                      <Badge variant="info">{history.length}회</Badge>
-                    </h4>
-                    {history.length > 0 ? (
-                      <div className="space-y-2">
-                        {history.map((p, idx) => {
-                          const event = getEventById(p.eventId);
-                          return (
-                            <div key={p.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 rounded-lg border border-slate-200">
-                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs sm:text-sm font-bold flex-shrink-0">
-                                  {history.length - idx}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-semibold text-slate-900 text-xs sm:text-sm truncate">
-                                    {event?.title || `산행 (${p.eventId.slice(0, 8)})`}
-                                  </p>
-                                  <p className="text-[10px] sm:text-xs text-slate-500">
-                                    {event?.date ? formatDate(event.date) : (p.createdAt ? formatDate(p.createdAt) : '-')}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-2">
-                                {p.isGuest && <Badge variant="warning">게스트</Badge>}
-                                <Badge variant={
-                                  p.status === 'confirmed' || p.status === 'attending' ? 'success' :
-                                  p.status === 'pending' ? 'warning' : 'default'
-                                }>
-                                  {p.status === 'confirmed' || p.status === 'attending' ? '참석' :
-                                   p.status === 'pending' ? '대기' : p.status}
-                                </Badge>
-                                {p.paymentStatus === 'completed' || p.paymentStatus === 'confirmed' ? (
-                                  <Badge variant="success">입금완료</Badge>
-                                ) : p.paymentStatus === 'pending' ? (
-                                  <Badge variant="default">미입금</Badge>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="bg-slate-50 text-center py-5 sm:py-6 rounded-xl border border-slate-200">
-                        <Mountain className="w-7 h-7 sm:w-8 sm:h-8 text-slate-300 mx-auto mb-2" />
-                        <p className="text-slate-500 text-xs sm:text-sm">아직 산행 참여 이력이 없습니다.</p>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* 신청 메시지 */}
-              {selectedPendingUser.applicationMessage && (
-                <div>
-                  <h4 className="text-sm sm:text-lg font-bold text-slate-900 mb-2 sm:mb-3 flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500" />
-                    신청 메시지
-                  </h4>
-                  <div className="bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-200">
-                    <p 
-                      className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedPendingUser.applicationMessage) }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              {selectedPendingUser.status === 'pending' && (
-                <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-slate-200">
-                  <button
-                    onClick={() => handleReject(selectedPendingUser.id)}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-white text-red-600 border border-red-300 rounded-xl text-sm sm:text-base font-semibold hover:bg-red-50 hover:border-red-400 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    거절
-                  </button>
-                  <button
-                    onClick={() => handleApprove(selectedPendingUser.id)}
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-emerald-600 text-white rounded-xl text-sm sm:text-base font-semibold hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Check className="w-4 h-4" />
-                    승인완료
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal>
       )}
 
       {/* Executives Tab */}

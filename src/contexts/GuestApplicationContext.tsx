@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { getDocument, getDocuments, setDocument, updateDocument, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
+import { getDocuments, setDocument, updateDocument, deleteDocument, queryDocuments } from '../lib/firebase/firestore';
 import { logError, ErrorLevel, ErrorCategory } from '../utils/errorHandler';
 import { GuestApplication } from '../types';
 import { waitForFirebase } from '../lib/firebase/config';
@@ -219,39 +219,6 @@ export const GuestApplicationProvider = ({ children }: { children: ReactNode }) 
           throw new Error('참가자 등록 실패');
         }
         console.log('📤 새 participation 생성:', participationId);
-      }
-
-      // 3.5. 회원명부(members)에 아직 없는 게스트라면 role='guest'로 자동 등록
-      // (이후 산행 참여 시 회원명부 기준으로 카운트가 쌓이고, 관리자가 "정회원으로 승격" 가능)
-      if (application.userId) {
-        try {
-          const existingMemberResult = await getDocument<any>('members', application.userId);
-          if (!existingMemberResult.success && existingMemberResult.error === 'Document not found') {
-            const newGuestMember = {
-              id: application.userId,
-              name: application.name,
-              email: application.email || '',
-              phoneNumber: application.phoneNumber || application.phone || '',
-              company: application.company || '',
-              position: application.position || '',
-              role: 'guest' as const,
-              isApproved: true,
-              isActive: true,
-              joinDate: new Date().toISOString().split('T')[0],
-              referredBy: application.referredBy || '',
-              createdAt: now,
-              updatedAt: now,
-            };
-            const memberCreateResult = await setDocument('members', application.userId, newGuestMember);
-            if (!memberCreateResult.success) {
-              console.warn('⚠️ 게스트 회원명부 등록 실패 (참가 승인은 완료됨):', memberCreateResult.error);
-            } else {
-              console.log('👤 게스트를 회원명부에 등록:', application.userId);
-            }
-          }
-        } catch (memberErr) {
-          console.warn('⚠️ 게스트 회원명부 등록 중 오류 (참가 승인은 완료됨):', memberErr);
-        }
       }
 
       // 4. 로컬 상태 업데이트

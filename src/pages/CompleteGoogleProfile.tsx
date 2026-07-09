@@ -7,7 +7,7 @@ import { useParticipations } from '../contexts/ParticipationContext';
 import { useGuestApplications } from '../contexts/GuestApplicationContext';
 import { useMembers } from '../contexts/MemberContext';
 import { formatPhoneNumberInput, removePhoneNumberHyphens } from '../utils/format';
-import { setDocument, queryDocuments, updateDocument, deleteDocument } from '../lib/firebase/firestore';
+import { getDocument, setDocument, queryDocuments, updateDocument, deleteDocument } from '../lib/firebase/firestore';
 
 // 추천인 검색 결과 마스킹 (간편 산행 신청과 동일한 방식 — 최소 정보만 노출)
 const maskReferrerName = (name: string): string => {
@@ -220,6 +220,30 @@ const CompleteGoogleProfile = () => {
     if (eventParticipations.some(p => p.userId === firebaseUser.uid && p.status !== 'cancelled')) {
       console.log('ℹ️ 이미 해당 산행에 신청되어 있음 - 게스트 참여 생성 스킵');
       return;
+    }
+
+    // 회원명부(members)에 아직 없으면 관리자 승인 없이 즉시 role='guest'로 등록
+    // (preRegisteredMembers/기존 회원 매칭 branch에서는 이미 role='member'로 생성돼 있으므로 건드리지 않음)
+    try {
+      const existingMemberResult = await getDocument<any>('members', firebaseUser.uid);
+      if (!existingMemberResult.success && existingMemberResult.error === 'Document not found') {
+        await setDocument('members', firebaseUser.uid, {
+          id: firebaseUser.uid,
+          name: profileData.name,
+          email: profileData.email || firebaseUser.email || '',
+          phoneNumber: profileData.phoneNumber || '',
+          company: profileData.company || '',
+          position: profileData.position || '',
+          role: 'guest' as const,
+          isApproved: true,
+          isActive: true,
+          joinDate: new Date().toISOString().split('T')[0],
+          authProvider: 'google',
+        });
+        console.log('👤 게스트를 회원명부에 즉시 등록:', firebaseUser.uid);
+      }
+    } catch (memberErr) {
+      console.warn('⚠️ 게스트 회원명부 등록 중 오류 (참가 신청은 계속 진행):', memberErr);
     }
 
     try {
