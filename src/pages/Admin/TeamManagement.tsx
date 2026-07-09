@@ -390,26 +390,28 @@ const TeamManagement = () => {
   };
 
   // 조편성 엑셀 템플릿 다운로드
+  // 조가 열(컬럼)로 배치되고 이름을 세로로 나열하는 가로형 양식
+  // (구분 | 1조 | 2조 | 3조 | 4조 ... / 첫 데이터 행=조장, 이후=조원)
   const handleDownloadExcelTemplate = async () => {
     const XLSX = await import('xlsx');
     const data = [
-      ['조번호', '이름', '조장여부'],
-      [1, '홍길동', 'O'],
-      [1, '김철수', ''],
-      [2, '이영희', 'O'],
-      [2, '박민수', ''],
+      ['구분', '1조', '2조', '3조', '4조'],
+      ['조장', '홍길동', '', '', ''],
+      [1, '김철수', '', '', ''],
+      [2, '이영희', '', '', ''],
+      [3, '박민수', '', '', ''],
     ];
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 10 }];
+    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '조편성');
     XLSX.writeFile(wb, '조편성_업로드양식.xlsx');
   };
 
-  // 조장 여부로 인정하는 값들
+  // 조장 여부로 인정하는 값들 (첫 열 라벨이 이 중 하나면 해당 행은 조장 행)
   const LEADER_FLAG_VALUES = ['O', 'o', '조장', '예', 'Y', 'y', 'true', 'TRUE'];
 
-  // 엑셀 파일 선택 → 파싱 + 신청자 매칭
+  // 엑셀 파일 선택 → 파싱(가로형: 조가 열, 이름이 세로) + 신청자 매칭
   const handleExcelFileSelected = async (file: File) => {
     setIsParsingExcel(true);
     setExcelParseError('');
@@ -427,46 +429,59 @@ const TeamManagement = () => {
 
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
 
-      const dataRows = rawRows.filter(r => {
-        const c0 = String(r[0] ?? '').trim();
-        const c1 = String(r[1] ?? '').trim();
-        if (!c0 && !c1) return false; // 빈 행
-        if (c0 === '조번호' || c1 === '이름') return false; // 헤더 행
-        return true;
-      });
-
-      if (dataRows.length === 0) {
+      if (rawRows.length === 0) {
         throw new Error('엑셀에서 데이터를 찾을 수 없습니다. 템플릿 양식을 확인해주세요.');
       }
 
-      const parsedRows = dataRows.map((r, idx) => {
-        const teamNumberRaw = String(r[0] ?? '').trim();
-        const teamNumber = parseInt(teamNumberRaw, 10);
-        const name = String(r[1] ?? '').trim();
-        const leaderFlagRaw = String(r[2] ?? '').trim();
-        const isLeaderFlag = LEADER_FLAG_VALUES.includes(leaderFlagRaw);
+      // 첫 행 = 헤더 (구분 | 1조 | 2조 | ...) — 각 열이 어느 조번호인지 추출
+      const headerRow = rawRows[0];
+      const teamColumns: { colIndex: number; teamNumber: number }[] = [];
+      for (let i = 1; i < headerRow.length; i++) {
+        const label = String(headerRow[i] ?? '').trim();
+        const match = label.match(/\d+/);
+        if (match) teamColumns.push({ colIndex: i, teamNumber: parseInt(match[0], 10) });
+      }
 
-        let rowError = '';
-        if (!name) rowError = '이름이 비어있습니다.';
-        else if (!teamNumberRaw || isNaN(teamNumber) || teamNumber < 1 || teamNumber > 10) {
-          rowError = '조번호가 올바르지 않습니다 (1~10 사이 숫자).';
+      if (teamColumns.length === 0) {
+        throw new Error('조 번호를 찾을 수 없습니다. 첫 행이 "구분 | 1조 | 2조 ..." 형식인지 확인해주세요.');
+      }
+
+      // 데이터 행을 순회하며 각 조 열에서 이름을 추출 (빈 칸은 건너뜀)
+      const parsedRows: any[] = [];
+      for (let r = 1; r < rawRows.length; r++) {
+        const row = rawRows[r];
+        const rowLabel = String(row[0] ?? '').trim();
+        const isLeaderFlag = LEADER_FLAG_VALUES.includes(rowLabel);
+
+        for (const tc of teamColumns) {
+          const name = String(row[tc.colIndex] ?? '').trim();
+          if (!name) continue; // 빈 칸 (조원 수가 적은 조)
+
+          let rowError = '';
+          if (tc.teamNumber < 1 || tc.teamNumber > 10) {
+            rowError = '조번호가 올바르지 않습니다 (1~10 사이 숫자).';
+          }
+
+          const candidates = rowError ? [] : applicants.filter(a => a.name.trim() === name);
+          const matchStatus = rowError ? 'error' : candidates.length === 0 ? 'not_found' : candidates.length === 1 ? 'matched' : 'ambiguous';
+
+          parsedRows.push({
+            rowIndex: parsedRows.length,
+            excelRowNumber: r + 1, // 실제 엑셀 시트 행 번호(1-based, 헤더=1행)
+            teamNumber: tc.teamNumber,
+            name,
+            isLeaderFlag,
+            rowError,
+            matchStatus,
+            candidates,
+            autoResolvedId: matchStatus === 'matched' ? candidates[0].id : null,
+          });
         }
+      }
 
-        const candidates = rowError ? [] : applicants.filter(a => a.name.trim() === name);
-        const matchStatus = rowError ? 'error' : candidates.length === 0 ? 'not_found' : candidates.length === 1 ? 'matched' : 'ambiguous';
-
-        return {
-          rowIndex: idx,
-          excelRowNumber: idx + 1,
-          teamNumber,
-          name,
-          isLeaderFlag,
-          rowError,
-          matchStatus,
-          candidates,
-          autoResolvedId: matchStatus === 'matched' ? candidates[0].id : null,
-        };
-      });
+      if (parsedRows.length === 0) {
+        throw new Error('엑셀에서 데이터를 찾을 수 없습니다. 템플릿 양식을 확인해주세요.');
+      }
 
       setExcelRows(parsedRows);
     } catch (err: any) {
@@ -507,17 +522,17 @@ const TeamManagement = () => {
       issues.push(`${unresolvedRows.length}개 행이 아직 해결되지 않았습니다.`);
     }
 
-    // 중복 배정 (같은 사람이 여러 행에 등장)
-    const idCounts = new Map<string, number[]>();
+    // 중복 배정 (같은 사람이 여러 조/행에 등장)
+    const idLocations = new Map<string, string[]>();
     excelRows.forEach(r => {
       const id = getResolvedIdForRow(r);
       if (!id) return;
-      if (!idCounts.has(id)) idCounts.set(id, []);
-      idCounts.get(id)!.push(r.excelRowNumber);
+      if (!idLocations.has(id)) idLocations.set(id, []);
+      idLocations.get(id)!.push(`${r.teamNumber}조(${r.excelRowNumber}행)`);
     });
-    const duplicateEntries = [...idCounts.entries()].filter(([, rows]) => rows.length > 1);
+    const duplicateEntries = [...idLocations.entries()].filter(([, locs]) => locs.length > 1);
     if (duplicateEntries.length > 0) {
-      issues.push(`동일 인물이 여러 행(${duplicateEntries.map(([, rows]) => rows.join(',')).join(' / ')})에 중복 배정되었습니다.`);
+      issues.push(`동일 인물이 여러 곳(${duplicateEntries.map(([, locs]) => locs.join(', ')).join(' / ')})에 중복 배정되었습니다.`);
     }
 
     // 조별 조장 검증
@@ -556,7 +571,7 @@ const TeamManagement = () => {
       if (staleRows.length > 0) {
         alert(
           `일부 신청자 정보가 업로드 검토 중에 변경되었습니다(취소/환불 등).\n` +
-          `해당 행(${staleRows.map(r => r.excelRowNumber).join(', ')})을 확인 후 엑셀을 다시 업로드해주세요.`
+          `해당 인원(${staleRows.map(r => `${r.teamNumber}조(${r.excelRowNumber}행) ${r.name}`).join(', ')})을 확인 후 엑셀을 다시 업로드해주세요.`
         );
         return;
       }
