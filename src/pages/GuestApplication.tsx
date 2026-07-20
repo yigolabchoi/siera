@@ -167,7 +167,8 @@ const GuestApplication = () => {
     clearGoogleRedirectResult();
 
     if (googleRedirectResult.success) {
-      if (!googleRedirectResult.isNewUser && !googleRedirectResult.needsProfile && !googleRedirectResult.isPendingUser) {
+      const isGuestMatch = googleRedirectResult.matchedRole === 'guest';
+      if (!googleRedirectResult.isNewUser && !googleRedirectResult.needsProfile && !googleRedirectResult.isPendingUser && !isGuestMatch) {
         if (mode === 'cancel') {
           navigate('/quick-apply', { replace: true });
         } else {
@@ -181,7 +182,8 @@ const GuestApplication = () => {
         return;
       }
 
-      if (googleRedirectResult.isPendingUser) {
+      if (googleRedirectResult.isPendingUser || isGuestMatch) {
+        // 게스트(role='guest') 또는 승인 대기 중 → 기존 프로필로 자동 재신청
         setWaitingForAutoApply(true);
       } else if (currentEvent) {
         navigate(`/complete-profile?guest=${currentEvent.id}`, { replace: true });
@@ -202,13 +204,26 @@ const GuestApplication = () => {
     if (autoApplyInProgress.current) return;
     if (!firebaseUser || !currentEvent) return;
 
+    // 게스트(role='guest') → 재로그인 없이 바로 재신청 (이미 인증된 세션이면 폼 재입력 불필요)
+    if (user && user.role === 'guest') {
+      autoApplyInProgress.current = true;
+      handleAutoApply({
+        name: user.name,
+        phoneNumber: user.phoneNumber,
+        email: user.email,
+        company: user.company,
+        position: user.position,
+      });
+      return;
+    }
+
     // 이미 승인된 정회원 → 일반 산행 신청으로 안내
     if (user?.isApproved) {
       navigate('/home/events', { replace: true });
       return;
     }
 
-    // 대기 중인 사용자 (프로필 있음) → 자동 신청
+    // (레거시) 승인 대기 중인 사용자 → 자동 신청
     if (user && !user.isApproved) {
       autoApplyInProgress.current = true;
       handleAutoApply({
@@ -250,8 +265,8 @@ const GuestApplication = () => {
     if (isGoogleLoggingIn || showSmsModal) return;
     if (!firebaseUser || !currentEvent) return;
 
-    // 승인된 정회원 → 간편 취소 안내
-    if (user?.isApproved) {
+    // 승인된 정회원(게스트 제외) → 간편 취소 안내
+    if (user?.isApproved && user.role !== 'guest') {
       navigate('/quick-apply', { replace: true });
       return;
     }
@@ -419,7 +434,8 @@ const GuestApplication = () => {
       const result = await loginWithGoogle();
 
       if (result.success) {
-        if (!result.isNewUser && !result.needsProfile && !result.isPendingUser) {
+        const isGuestMatch = result.matchedRole === 'guest';
+        if (!result.isNewUser && !result.needsProfile && !result.isPendingUser && !isGuestMatch) {
           // 이미 승인된 정회원
           if (mode === 'cancel') {
             navigate('/quick-apply', { replace: true });
@@ -434,8 +450,8 @@ const GuestApplication = () => {
           return;
         }
 
-        if (result.isPendingUser) {
-          // 대기 중인 사용자 → 기존 프로필로 자동 신청 (useEffect에서 처리)
+        if (result.isPendingUser || isGuestMatch) {
+          // 게스트(role='guest') 또는 승인 대기 중 → 기존 프로필로 자동 재신청 (useEffect에서 처리)
           setWaitingForAutoApply(true);
         } else {
           // 신규 사용자 → 추가정보 입력 페이지로 이동
@@ -502,7 +518,8 @@ const GuestApplication = () => {
       const result = await verifyPhoneCode(verificationCode);
 
       if (result.success) {
-        if (result.matchedMember && !result.isPendingUser && !result.isNewUser && !result.needsProfile) {
+        const isGuestMatch = result.matchedRole === 'guest';
+        if (result.matchedMember && !result.isPendingUser && !result.isNewUser && !result.needsProfile && !isGuestMatch) {
           // 이미 승인된 정회원
           if (mode === 'cancel') {
             setSmsSuccess(`${result.matchedMember.name}님은 정회원입니다.\n간편 취소를 이용해주세요.`);
@@ -529,8 +546,8 @@ const GuestApplication = () => {
           return;
         }
 
-        if (result.isPendingUser) {
-          // 대기 중인 사용자 → 기존 프로필로 자동 신청
+        if (result.isPendingUser || isGuestMatch) {
+          // 게스트(role='guest') 또는 승인 대기 중 → 기존 프로필로 자동 재신청
           setSmsSuccess('인증이 완료되었습니다!');
           setTimeout(() => {
             setShowSmsModal(false);

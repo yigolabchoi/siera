@@ -19,6 +19,7 @@ interface GoogleLoginResult {
   isNewUser?: boolean;
   isPendingUser?: boolean;
   needsProfile?: boolean;
+  matchedRole?: string; // members에서 매칭된 기존 사용자의 role (게스트 재신청 판별용)
   message?: string;
 }
 
@@ -28,6 +29,7 @@ interface PhoneLoginResult {
   isNewUser?: boolean;
   isPendingUser?: boolean;
   needsProfile?: boolean;
+  matchedRole?: string; // members에서 매칭된 기존 사용자의 role (게스트 재신청 판별용)
   matchedMember?: {
     name: string;
     position?: string;
@@ -297,7 +299,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 'google'
               );
             }
-            setGoogleRedirectResult({ success: true, isNewUser: false });
+            setGoogleRedirectResult({ success: true, isNewUser: false, matchedRole: userData.role });
           } else {
             const pendingResult = await getDocument<any>('pendingUsers', result.user.uid);
             if (pendingResult.success && pendingResult.data) {
@@ -539,7 +541,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'google'
           );
         }
-        return { success: true, isNewUser: false };
+        return { success: true, isNewUser: false, matchedRole: existingUser.role };
       }
 
       // pendingUsers 확인
@@ -658,7 +660,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'phone'
           );
         }
-        return { success: true, isNewUser: false };
+        return { success: true, isNewUser: false, matchedRole: existingUser.role };
       }
 
       // 2차: members 컬렉션에서 전화번호로 매칭 (사전등록 또는 다른 프로바이더로 가입한 경우)
@@ -721,9 +723,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 'phone'
               );
             }
-            return { 
-              success: true, 
+            return {
+              success: true,
               isNewUser: false,
+              matchedRole: matchedMember.role,
               matchedMember: {
                 name: matchedMember.name,
                 position: matchedMember.position,
@@ -734,7 +737,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       }
-      
+
       // 3차: preRegisteredMembers 컬렉션에서 전화번호로 매칭 (관리자가 사전등록한 회원)
       if (phoneNumber) {
         const domesticNumber = phoneNumber.startsWith('+82') 
