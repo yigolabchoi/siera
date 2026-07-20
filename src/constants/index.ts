@@ -134,6 +134,7 @@ export const STORAGE_KEYS = {
   DEV_MODE: 'sierra_dev_mode',
   DEV_MODE_STATUS: 'sierra_dev_mode_status',
   THEME: 'sierra_theme',
+  HIDE_APPLICATION_GUIDE: 'sierra_hide_application_guide',
 } as const;
 
 /**
