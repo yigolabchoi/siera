@@ -430,6 +430,39 @@ const TeamManagement = () => {
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
       const approvedMembers = members.filter(m => m.isApproved && m.isActive !== false);
 
+      // 이 산행 신청자도, 클럽 회원도 아닌 이름을 위한 과거 참가 이력 조회
+      // (다른 산행에 참가한 적 있는 동일 이름의 userId를 찾아 재사용 — 인적사항도 함께 재사용)
+      const historicalByName = new Map<string, { id: string; userId: string; name: string; company: string; position: string; phone: string; email: string }[]>();
+      {
+        const latestByUserId = new Map<string, any>();
+        participations.forEach(p => {
+          if (p.eventId === selectedEventIdForTeam) return; // 이 산행은 이미 applicants로 커버됨
+          const nm = (p.userName || '').trim();
+          if (!nm) return;
+          const existing = latestByUserId.get(p.userId);
+          if (!existing || new Date(p.createdAt || 0) > new Date(existing.createdAt || 0)) {
+            latestByUserId.set(p.userId, p);
+          }
+        });
+        const grouped = new Map<string, Map<string, any>>();
+        latestByUserId.forEach((p, uid) => {
+          const nm = p.userName.trim();
+          if (!grouped.has(nm)) grouped.set(nm, new Map());
+          grouped.get(nm)!.set(uid, p);
+        });
+        grouped.forEach((uidMap, nm) => {
+          historicalByName.set(nm, [...uidMap.entries()].map(([uid, p]) => ({
+            id: uid,
+            userId: uid,
+            name: p.userName,
+            company: p.userCompany || '',
+            position: p.userPosition || '',
+            phone: p.userPhone || '',
+            email: p.userEmail || '',
+          })));
+        });
+      }
+
       if (rawRows.length === 0) {
         throw new Error('엑셀에서 데이터를 찾을 수 없습니다. 템플릿 양식을 확인해주세요.');
       }
@@ -467,7 +500,7 @@ const TeamManagement = () => {
 
           let matchStatus: string;
           let candidates: any[];
-          let candidateSource: 'applicant' | 'member' | null;
+          let candidateSource: 'applicant' | 'member' | 'history' | 'new_guest' | null;
 
           if (rowError) {
             matchStatus = 'error'; candidates = []; candidateSource = null;
@@ -484,7 +517,16 @@ const TeamManagement = () => {
             } else if (memberCandidates.length > 1) {
               matchStatus = 'member_ambiguous'; candidates = memberCandidates; candidateSource = 'member';
             } else {
-              matchStatus = 'not_found'; candidates = []; candidateSource = null;
+              // 회원도 아님 — 과거 다른 산행 참가 이력에서 동일 이름을 찾아 인적사항을 재사용
+              const historyCandidates = historicalByName.get(name) || [];
+              if (historyCandidates.length === 1) {
+                matchStatus = 'history_guest'; candidates = historyCandidates; candidateSource = 'history';
+              } else if (historyCandidates.length > 1) {
+                matchStatus = 'history_guest_ambiguous'; candidates = historyCandidates; candidateSource = 'history';
+              } else {
+                // 홈페이지로 신청한 적도, 과거 참가 이력도 없는 완전 신규 인원 — 이름만으로 게스트 자동 등록
+                matchStatus = 'new_guest'; candidates = []; candidateSource = 'new_guest';
+              }
             }
           }
 
@@ -498,7 +540,7 @@ const TeamManagement = () => {
             matchStatus,
             candidates,
             candidateSource,
-            autoResolvedId: (matchStatus === 'matched' || matchStatus === 'member_pending') ? candidates[0].id : null,
+            autoResolvedId: (matchStatus === 'matched' || matchStatus === 'member_pending' || matchStatus === 'history_guest') ? candidates[0].id : null,
           });
         }
       }
@@ -518,9 +560,17 @@ const TeamManagement = () => {
   // 각 행의 최종 배정 ID (매칭 자동 or 동명이인 수동 선택)
   // 반환값은 candidateSource==='applicant'면 participationId, candidateSource==='member'면 memberId
   // (member인 경우 실제 적용 시점에 신청이 먼저 생성되고 participationId로 치환됨 — handleApplyExcelTeams 참고)
+  // 신청자/과거이력 동명이인은 관리자가 직접 고르지 않으면 첫 번째 후보를 자동 선택한다(화면엔 "자동 선택됨"으로
+  // 표시, 드롭다운으로 언제든 변경 가능). 다만 회원(member_ambiguous) 동명이인은 잘못 선택되면 엉뚱한 회원에게
+  // 결제/참가 이력이 붙을 수 있어 자동 선택하지 않고 반드시 수동으로 선택하게 한다.
+  // 완전 신규 게스트는 이름 단위로 고유 키를 부여해 적용 시점에 새로 등록한다.
   const getResolvedIdForRow = (row: any): string | null => {
-    if (row.matchStatus === 'matched' || row.matchStatus === 'member_pending') return row.autoResolvedId;
-    if (row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') return excelAmbiguousSelections[row.rowIndex] || null;
+    if (row.matchStatus === 'matched' || row.matchStatus === 'member_pending' || row.matchStatus === 'history_guest') return row.autoResolvedId;
+    if (row.matchStatus === 'ambiguous' || row.matchStatus === 'history_guest_ambiguous') {
+      return excelAmbiguousSelections[row.rowIndex] || row.candidates[0]?.id || null;
+    }
+    if (row.matchStatus === 'member_ambiguous') return excelAmbiguousSelections[row.rowIndex] || null;
+    if (row.matchStatus === 'new_guest') return `__new__:${row.name}`;
     return null;
   };
 
@@ -540,18 +590,22 @@ const TeamManagement = () => {
   // 전체 검증: 업로드 적용이 가능한 상태인지
   const excelValidation = (() => {
     if (excelRows.length === 0) {
-      return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'], notFoundRows: [], ambiguousRows: [], formatErrorRows: [], pendingMemberRows: [] };
+      return { isValid: false, issues: ['엑셀 파일을 먼저 업로드해주세요.'], ambiguousRows: [], memberAmbiguousUnresolvedRows: [], formatErrorRows: [], pendingMemberRows: [], historyGuestRows: [], newGuestRows: [] };
     }
     const issues: string[] = [];
 
-    // 신청자 명단·회원 어디에도 없는 행 — 오타이거나 정말 등록되지 않은 사람 (적용 차단)
-    const notFoundRows = excelRows.filter(r => r.matchStatus === 'not_found');
-    // 동명이인인데 아직 수동으로 선택되지 않은 행 (신청자 동명이인 + 회원 동명이인 모두 포함, 적용 차단)
-    const ambiguousRows = excelRows.filter(r => (r.matchStatus === 'ambiguous' || r.matchStatus === 'member_ambiguous') && !getResolvedIdForRow(r));
+    // 신청자/과거이력 동명이인 — 차단하지 않고 자동으로 첫 후보를 선택하되, 화면에 안내만 표시
+    const ambiguousRows = excelRows.filter(r => r.matchStatus === 'ambiguous' || r.matchStatus === 'history_guest_ambiguous');
+    // 회원 동명이인인데 아직 수동으로 선택되지 않은 행 — 잘못 배정 시 결제/참가 이력이 엉뚱한 회원에게 붙을 수 있어 적용 차단
+    const memberAmbiguousUnresolvedRows = excelRows.filter(r => r.matchStatus === 'member_ambiguous' && !getResolvedIdForRow(r));
     // 조번호/이름 형식 자체가 잘못된 행 (적용 차단)
     const formatErrorRows = excelRows.filter(r => r.matchStatus === 'error');
-    // 회원이지만 이 산행에 아직 신청 안 된 사람 — 차단하지 않고 적용 시 자동으로 산행 신청 처리
+    // 회원이지만 이 산행에 아직 신청 안 된 사람(동명이인 중 선택 완료된 회원 포함) — 차단하지 않고 적용 시 자동으로 산행 신청 처리
     const pendingMemberRows = excelRows.filter(r => r.matchStatus === 'member_pending' || (r.matchStatus === 'member_ambiguous' && getResolvedIdForRow(r)));
+    // 과거 다른 산행 참가 이력에서 이름이 발견된 게스트 — 그 이력의 인적사항으로 자동 등록
+    const historyGuestRows = excelRows.filter(r => r.matchStatus === 'history_guest' || r.matchStatus === 'history_guest_ambiguous');
+    // 신청 이력이 전혀 없는 완전 신규 인원 — 이름만으로 게스트 자동 등록 (회사/직책 미표시)
+    const newGuestRows = excelRows.filter(r => r.matchStatus === 'new_guest');
 
     // 중복 배정 (같은 사람이 여러 조/행에 등장)
     const idLocations = new Map<string, string[]>();
@@ -581,12 +635,14 @@ const TeamManagement = () => {
     }
 
     return {
-      isValid: issues.length === 0 && notFoundRows.length === 0 && ambiguousRows.length === 0 && formatErrorRows.length === 0,
+      isValid: issues.length === 0 && formatErrorRows.length === 0 && memberAmbiguousUnresolvedRows.length === 0,
       issues,
-      notFoundRows,
       ambiguousRows,
+      memberAmbiguousUnresolvedRows,
       formatErrorRows,
       pendingMemberRows,
+      historyGuestRows,
+      newGuestRows,
     };
   })();
 
@@ -594,10 +650,15 @@ const TeamManagement = () => {
   const handleApplyExcelTeams = async () => {
     if (!excelValidation.isValid) return;
 
-    const autoRegisterCount = excelValidation.pendingMemberRows.length;
-    const confirmMsg = autoRegisterCount > 0
-      ? `엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.\n` +
-        `(이 중 ${autoRegisterCount}명은 아직 이 산행에 신청되지 않은 회원으로, 자동으로 산행 신청 처리됩니다.)`
+    const memberAutoCount = excelValidation.pendingMemberRows.length;
+    const historyAutoCount = excelValidation.historyGuestRows.length;
+    const newGuestAutoCount = excelValidation.newGuestRows.length;
+    const autoNotes: string[] = [];
+    if (memberAutoCount > 0) autoNotes.push(`아직 이 산행에 신청되지 않은 회원 ${memberAutoCount}명은 자동으로 산행 신청 처리됩니다.`);
+    if (historyAutoCount > 0) autoNotes.push(`과거 다른 산행 참가 이력이 있는 게스트 ${historyAutoCount}명은 그 이력의 인적사항으로 자동 등록됩니다.`);
+    if (newGuestAutoCount > 0) autoNotes.push(`시스템에 이력이 전혀 없는 신규 게스트 ${newGuestAutoCount}명은 이름만으로 자동 등록됩니다(회사/직책 미표시).`);
+    const confirmMsg = autoNotes.length > 0
+      ? `엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.\n\n` + autoNotes.map(n => `· ${n}`).join('\n')
       : `엑셀 명단대로 조 편성을 적용하시겠습니까?\n\n${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정됩니다.`;
     if (!confirm(confirmMsg)) return;
 
@@ -605,65 +666,107 @@ const TeamManagement = () => {
     try {
       const selectedEvent = events.find(e => e.id === selectedEventIdForTeam);
       const eventParticipations = getParticipationsByEvent(selectedEventIdForTeam);
-      const isAlreadyRegistered = (memberId: string) =>
-        eventParticipations.some(p => p.userId === memberId && p.status !== 'cancelled');
+      const isAlreadyRegistered = (userId: string) =>
+        eventParticipations.some(p => p.userId === userId && p.status !== 'cancelled');
 
-      // 1. 회원이지만 이 산행에 아직 신청되지 않은 사람 먼저 자동 등록 (중복 인물은 1회만)
-      const memberIdsToRegister = [...new Set(
-        excelRows
-          .filter(r => r.candidateSource === 'member')
-          .map(r => getResolvedIdForRow(r))
-          .filter((id): id is string => !!id && !isAlreadyRegistered(id))
-      )];
-
-      const newParticipationIdByMemberId = new Map<string, string>();
+      // 이 산행에 아직 신청 기록이 없는 행(회원/과거이력 게스트/신규 게스트)을 먼저 자동 등록 (동일 인물은 1회만)
+      const newParticipationIdByKey = new Map<string, string>();
       let paymentCreationFailedCount = 0;
 
-      for (const memberId of memberIdsToRegister) {
-        const member = members.find(m => m.id === memberId);
-        if (!member) continue;
+      const autoRegister = async (payload: {
+        userId: string; userName: string; userEmail: string; userPhone: string;
+        userCompany: string; userPosition: string; isGuest: boolean;
+      }) => {
         const participation = await addParticipation({
           eventId: selectedEventIdForTeam,
+          ...payload,
+          status: 'pending',
+          paymentStatus: 'pending',
+        });
+        try {
+          await createPaymentForParticipation({
+            id: participation.id,
+            eventId: selectedEventIdForTeam,
+            ...payload,
+          }, selectedEvent?.paymentInfo?.cost || selectedEvent?.cost);
+        } catch (paymentErr) {
+          paymentCreationFailedCount++;
+          console.warn('결제 레코드 생성 실패 (참가 신청은 완료됨):', payload.userId, paymentErr);
+        }
+        return participation.id;
+      };
+
+      // 1. 회원이지만 이 산행에 아직 신청되지 않은 사람
+      const memberKeysToRegister = [...new Set(
+        excelRows.filter(r => r.candidateSource === 'member').map(r => getResolvedIdForRow(r))
+          .filter((id): id is string => !!id && !isAlreadyRegistered(id))
+      )];
+      for (const memberId of memberKeysToRegister) {
+        const member = members.find(m => m.id === memberId);
+        if (!member) continue;
+        const pid = await autoRegister({
           userId: member.id,
           userName: member.name,
           userEmail: member.email || '',
           userPhone: member.phoneNumber || '',
           userCompany: member.company || '',
           userPosition: member.position || '',
-          status: 'pending',
-          paymentStatus: 'pending',
           isGuest: false,
         });
-        newParticipationIdByMemberId.set(memberId, participation.id);
-
-        try {
-          await createPaymentForParticipation({
-            id: participation.id,
-            eventId: selectedEventIdForTeam,
-            userId: member.id,
-            userName: member.name,
-            userEmail: member.email || '',
-            userPhone: member.phoneNumber || '',
-            userCompany: member.company || '',
-            userPosition: member.position || '',
-            isGuest: false,
-          }, selectedEvent?.paymentInfo?.cost || selectedEvent?.cost);
-        } catch (paymentErr) {
-          paymentCreationFailedCount++;
-          console.warn('결제 레코드 생성 실패 (참가 신청은 완료됨):', memberId, paymentErr);
-        }
+        newParticipationIdByKey.set(memberId, pid);
       }
 
-      // 회원 자동등록 이후 최신 신청자 목록 재조회 (방금 등록된 사람 포함)
+      // 2. 과거 다른 산행 참가 이력에서 이름이 발견된 게스트 — 그 이력의 인적사항을 재사용
+      const historyKeysToRegister = [...new Set(
+        excelRows.filter(r => r.candidateSource === 'history').map(r => getResolvedIdForRow(r))
+          .filter((id): id is string => !!id && !isAlreadyRegistered(id))
+      )];
+      for (const userId of historyKeysToRegister) {
+        const row = excelRows.find(r => r.candidateSource === 'history' && getResolvedIdForRow(r) === userId);
+        const candidate = row?.candidates.find((c: any) => c.id === userId) || row?.candidates[0];
+        if (!candidate) continue;
+        const pid = await autoRegister({
+          userId: candidate.userId,
+          userName: candidate.name,
+          userEmail: candidate.email || '',
+          userPhone: candidate.phone || '',
+          userCompany: candidate.company || '',
+          userPosition: candidate.position || '',
+          isGuest: true,
+        });
+        newParticipationIdByKey.set(userId, pid);
+      }
+
+      // 3. 시스템에 이력이 전혀 없는 완전 신규 게스트 — 이름만으로 등록(회사/직책 미표시), 동일 이름은 한 번만 생성
+      const newGuestKeysToRegister = [...new Set(
+        excelRows.filter(r => r.candidateSource === 'new_guest').map(r => getResolvedIdForRow(r)).filter((id): id is string => !!id)
+      )];
+      for (const key of newGuestKeysToRegister) {
+        const row = excelRows.find(r => r.candidateSource === 'new_guest' && getResolvedIdForRow(r) === key);
+        if (!row) continue;
+        const syntheticUserId = `guest-excel-${selectedEventIdForTeam}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const pid = await autoRegister({
+          userId: syntheticUserId,
+          userName: row.name,
+          userEmail: '',
+          userPhone: '',
+          userCompany: '',
+          userPosition: '',
+          isGuest: true,
+        });
+        newParticipationIdByKey.set(key, pid);
+      }
+
+      // 자동등록 이후 최신 신청자 목록 재조회 (방금 등록된 사람 포함)
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
       const findApplicant = (id: string) => applicants.find(a => a.id === id);
 
-      // 각 행의 최종 participationId 계산 (member 출처는 방금 생성했거나 이미 있던 participationId로 치환)
+      // 각 행의 최종 participationId 계산 (member/history/new_guest 출처는 방금 생성했거나 이미 있던 participationId로 치환)
       const resolveFinalId = (row: any): string | null => {
         const id = getResolvedIdForRow(row);
         if (!id) return null;
-        if (row.candidateSource === 'member') {
-          if (newParticipationIdByMemberId.has(id)) return newParticipationIdByMemberId.get(id)!;
+        if (row.candidateSource === 'member' || row.candidateSource === 'history' || row.candidateSource === 'new_guest') {
+          if (newParticipationIdByKey.has(id)) return newParticipationIdByKey.get(id)!;
           const existing = eventParticipations.find(p => p.userId === id && p.status !== 'cancelled');
           return existing ? existing.id : null;
         }
@@ -671,9 +774,9 @@ const TeamManagement = () => {
       };
 
       // 미리보기 확인 중(동명이인 선택 등) 신청 취소/환불 등으로 대상자가 바뀌었는지 재검증
-      // — 조용히 누락시키지 않고 명확히 중단 (방금 자동등록한 회원은 이미 반영되어 있으므로 제외)
+      // — 조용히 누락시키지 않고 명확히 중단 (방금 자동등록한 인원은 이미 반영되어 있으므로 제외)
       const staleRows = excelRows.filter(r => {
-        if (r.candidateSource === 'member') return false; // 방금 처리했거나 처리 대상이 아님
+        if (r.candidateSource === 'member' || r.candidateSource === 'history' || r.candidateSource === 'new_guest') return false; // 방금 처리했거나 처리 대상이 아님
         const id = getResolvedIdForRow(r);
         return id && !findApplicant(id);
       });
@@ -750,9 +853,10 @@ const TeamManagement = () => {
 
       setTeams(updatedTeams);
       await syncTeamsToContext(updatedTeams);
+      const totalAutoRegistered = newParticipationIdByKey.size;
       alert(
         `엑셀 업로드로 ${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정되었습니다.` +
-        (memberIdsToRegister.length > 0 ? `\n(${memberIdsToRegister.length}명 자동 산행 신청 처리됨)` : '') +
+        (totalAutoRegistered > 0 ? `\n(${totalAutoRegistered}명 자동 산행 신청 처리됨)` : '') +
         (paymentCreationFailedCount > 0 ? `\n\n⚠️ ${paymentCreationFailedCount}명의 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.` : '')
       );
       closeExcelUploadModal();
@@ -1654,7 +1758,10 @@ const TeamManagement = () => {
             <div className="p-6 border-b flex items-center justify-between">
               <div>
                 <h3 className="text-2xl font-bold text-slate-900">조편성 엑셀 업로드</h3>
-                <p className="text-sm text-slate-600 mt-1">양식(조번호 / 이름 / 조장여부)에 맞춰 작성한 엑셀을 업로드하세요.</p>
+                <p className="text-sm text-slate-600 mt-1">
+                  양식(조번호 / 이름 / 조장여부)에 맞춰 작성한 엑셀을 업로드하세요.
+                  이 산행에 신청하지 않은 이름도 자동으로 게스트 산행 신청 처리됩니다.
+                </p>
               </div>
               <button onClick={closeExcelUploadModal} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                 <X className="h-6 w-6 text-slate-600" />
@@ -1696,20 +1803,20 @@ const TeamManagement = () => {
 
               {excelRows.length > 0 && (
                 <>
-                  {excelValidation.notFoundRows.length > 0 && (
+                  {excelValidation.memberAmbiguousUnresolvedRows.length > 0 && (
                     <div className="p-4 bg-red-50 border border-red-300 rounded-xl">
                       <p className="text-sm font-bold text-red-900 mb-1.5 flex items-center gap-1.5">
-                        <X className="w-4 h-4" />
-                        시스템(이 산행 신청자 명단)에 없는 이름 {excelValidation.notFoundRows.length}명
+                        <AlertCircle className="w-4 h-4" />
+                        동명이인 회원 확인이 필요한 이름 {excelValidation.memberAmbiguousUnresolvedRows.length}명
                       </p>
                       <ul className="text-sm text-red-800 space-y-1 list-disc list-inside">
-                        {excelValidation.notFoundRows.map((r: any) => (
-                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
+                        {excelValidation.memberAmbiguousUnresolvedRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행) — 아래 목록에서 선택해주세요</li>
                         ))}
                       </ul>
                       <p className="text-xs text-red-700 mt-2">
-                        오타이거나, 이 산행에 아직 참가 신청되지 않은 사람입니다. 엑셀의 이름을 수정하거나,
-                        먼저 "참가자 추가"로 해당 인원을 이 산행에 등록한 뒤 다시 업로드해주세요.
+                        같은 이름의 회원이 여러 명입니다. 잘못 선택하면 엉뚱한 회원에게 참가/결제 이력이 붙을 수 있어
+                        자동 선택하지 않습니다. 아래 목록에서 직접 선택해야 적용할 수 있습니다.
                       </p>
                     </div>
                   )}
@@ -1718,13 +1825,49 @@ const TeamManagement = () => {
                     <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl">
                       <p className="text-sm font-bold text-amber-900 mb-1.5 flex items-center gap-1.5">
                         <AlertCircle className="w-4 h-4" />
-                        동명이인 확인이 필요한 이름 {excelValidation.ambiguousRows.length}명
+                        동명이인이 있어 자동 선택된 이름 {excelValidation.ambiguousRows.length}명
                       </p>
                       <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
                         {excelValidation.ambiguousRows.map((r: any) => (
-                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행) — 아래 목록에서 선택해주세요</li>
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행) — 후보 중 1명이 자동 선택됨, 필요 시 아래 목록에서 변경</li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {excelValidation.historyGuestRows.length > 0 && (
+                    <div className="p-4 bg-indigo-50 border border-indigo-300 rounded-xl">
+                      <p className="text-sm font-bold text-indigo-900 mb-1.5 flex items-center gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        과거 참가 이력으로 자동 연결된 게스트 {excelValidation.historyGuestRows.length}명
+                      </p>
+                      <ul className="text-sm text-indigo-800 space-y-1 list-disc list-inside">
+                        {excelValidation.historyGuestRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-indigo-700 mt-2">
+                        이 산행 신청자·회원 명단엔 없지만 과거 다른 산행 참가 이력이 있는 이름입니다.
+                        "적용"을 누르면 그 이력의 회사/직책/연락처로 이 산행에 자동 신청 처리됩니다.
+                      </p>
+                    </div>
+                  )}
+
+                  {excelValidation.newGuestRows.length > 0 && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl">
+                      <p className="text-sm font-bold text-emerald-900 mb-1.5 flex items-center gap-1.5">
+                        <UserPlus className="w-4 h-4" />
+                        신규 게스트로 자동 등록될 이름 {excelValidation.newGuestRows.length}명
+                      </p>
+                      <ul className="text-sm text-emerald-800 space-y-1 list-disc list-inside">
+                        {excelValidation.newGuestRows.map((r: any) => (
+                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-emerald-700 mt-2">
+                        시스템 어디에도 이력이 없는 이름입니다. "적용"을 누르면 이름만으로 게스트 참가 신청이
+                        자동 생성됩니다(회사/직책은 정보가 없어 비워둡니다).
+                      </p>
                     </div>
                   )}
 
@@ -1788,13 +1931,30 @@ const TeamManagement = () => {
                                 <div key={row.rowIndex} className="px-4 py-2.5 flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-2 min-w-0">
                                     {row.matchStatus === 'matched' && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
-                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'history_guest_ambiguous') && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                                    {row.matchStatus === 'member_ambiguous' && <AlertCircle className={`w-4 h-4 flex-shrink-0 ${resolvedId ? 'text-amber-500' : 'text-red-500'}`} />}
                                     {row.matchStatus === 'member_pending' && <UserPlus className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-                                    {(row.matchStatus === 'not_found' || row.matchStatus === 'error') && <X className="w-4 h-4 text-red-500 flex-shrink-0" />}
+                                    {row.matchStatus === 'history_guest' && <UserPlus className="w-4 h-4 text-indigo-500 flex-shrink-0" />}
+                                    {row.matchStatus === 'new_guest' && <UserPlus className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
+                                    {row.matchStatus === 'error' && <X className="w-4 h-4 text-red-500 flex-shrink-0" />}
                                     <span className="font-semibold text-slate-900 truncate">
                                       {row.name || `(${row.excelRowNumber}행)`}
                                     </span>
                                     {row.isLeaderFlag && <Badge variant="primary" className="text-xs flex-shrink-0">조장</Badge>}
+                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'history_guest_ambiguous') && (
+                                      <Badge variant="warning" className="text-xs flex-shrink-0">자동 선택됨</Badge>
+                                    )}
+                                    {row.matchStatus === 'member_ambiguous' && (
+                                      <Badge variant={resolvedId ? 'success' : 'danger'} className="text-xs flex-shrink-0">
+                                        {resolvedId ? '선택됨' : '선택 필요'}
+                                      </Badge>
+                                    )}
+                                    {row.matchStatus === 'new_guest' && (
+                                      <Badge variant="success" className="text-xs flex-shrink-0">신규 게스트 자동등록</Badge>
+                                    )}
+                                    {row.matchStatus === 'history_guest' && (
+                                      <Badge variant="info" className="text-xs flex-shrink-0">이력 연결</Badge>
+                                    )}
                                   </div>
 
                                   <div className="flex-shrink-0 text-right">
@@ -1808,21 +1968,30 @@ const TeamManagement = () => {
                                         회원 · {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || ''} (자동 신청됨)
                                       </span>
                                     )}
-                                    {row.matchStatus === 'not_found' && (
-                                      <span className="text-xs text-red-600">신청자 목록에서 찾을 수 없음</span>
+                                    {row.matchStatus === 'history_guest' && (
+                                      <span className="text-xs text-indigo-600">
+                                        {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || '이전 참가 이력'} (자동 신청됨)
+                                      </span>
+                                    )}
+                                    {row.matchStatus === 'new_guest' && (
+                                      <span className="text-xs text-emerald-700">회사/직책 없음 (신규 게스트로 자동 신청됨)</span>
                                     )}
                                     {row.matchStatus === 'error' && (
                                       <span className="text-xs text-red-600">{row.rowError}</span>
                                     )}
-                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous') && (
+                                    {(row.matchStatus === 'ambiguous' || row.matchStatus === 'member_ambiguous' || row.matchStatus === 'history_guest_ambiguous') && (
                                       <select
                                         value={resolvedId || ''}
                                         onChange={(e) => setExcelAmbiguousSelections(prev => ({ ...prev, [row.rowIndex]: e.target.value }))}
-                                        className="text-xs border border-amber-300 rounded-lg px-2 py-1 bg-amber-50"
+                                        className={`text-xs border rounded-lg px-2 py-1 ${
+                                          row.matchStatus === 'member_ambiguous' && !resolvedId
+                                            ? 'border-red-400 bg-red-50'
+                                            : 'border-amber-300 bg-amber-50'
+                                        }`}
                                       >
-                                        <option value="">
-                                          {row.matchStatus === 'member_ambiguous' ? '동명이인 회원' : '동명이인'} {row.candidates.length}명 — 선택
-                                        </option>
+                                        {row.matchStatus === 'member_ambiguous' && (
+                                          <option value="">동명이인 회원 {row.candidates.length}명 — 선택</option>
+                                        )}
                                         {row.candidates.map((c: any) => (
                                           <option key={c.id} value={c.id}>
                                             {[c.company, c.position].filter(Boolean).join(' / ') || c.id}
