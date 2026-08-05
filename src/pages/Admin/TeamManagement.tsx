@@ -711,7 +711,9 @@ const TeamManagement = () => {
           userPhone: member.phoneNumber || '',
           userCompany: member.company || '',
           userPosition: member.position || '',
-          isGuest: false,
+          // 회원명부엔 role='guest'로 등록된 과거 게스트도 포함될 수 있으므로 role 기준으로 판단
+          // (정회원인데 isGuest:false로 고정하면 회원명부에 게스트로 백필된 사람이 정회원으로 잘못 등록됨)
+          isGuest: member.role === 'guest',
         });
         newParticipationIdByKey.set(memberId, pid);
       }
