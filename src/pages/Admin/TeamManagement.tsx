@@ -1894,13 +1894,19 @@ const TeamManagement = () => {
                         아직 이 산행에 신청되지 않은 회원 {excelValidation.pendingMemberRows.length}명
                       </p>
                       <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-                        {excelValidation.pendingMemberRows.map((r: any) => (
-                          <li key={r.rowIndex}>{r.teamNumber}조 · {r.name} ({r.excelRowNumber}행)</li>
-                        ))}
+                        {excelValidation.pendingMemberRows.map((r: any) => {
+                          const isGuestMember = r.candidates?.[0]?.role === 'guest' || (excelAmbiguousSelections[r.rowIndex] && r.candidates?.find((c: any) => c.id === excelAmbiguousSelections[r.rowIndex])?.role === 'guest');
+                          return (
+                            <li key={r.rowIndex}>
+                              {r.teamNumber}조 · {r.name} ({r.excelRowNumber}행){isGuestMember ? ' — 게스트 회원' : ''}
+                            </li>
+                          );
+                        })}
                       </ul>
                       <p className="text-xs text-blue-700 mt-2">
                         클럽 회원 명단과는 일치하지만 이 산행 신청자 명단엔 없는 사람입니다.
-                        "적용"을 누르면 이 산행에 자동으로 신청 처리된 뒤 조 편성됩니다.
+                        "적용"을 누르면 이 산행에 자동으로 신청 처리된 뒤 조 편성됩니다(회원명부에 게스트로
+                        등록된 사람은 게스트로 자동 신청됩니다).
                       </p>
                     </div>
                   )}
@@ -1935,7 +1941,7 @@ const TeamManagement = () => {
                                     {row.matchStatus === 'matched' && <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />}
                                     {(row.matchStatus === 'ambiguous' || row.matchStatus === 'history_guest_ambiguous') && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                                     {row.matchStatus === 'member_ambiguous' && <AlertCircle className={`w-4 h-4 flex-shrink-0 ${resolvedId ? 'text-amber-500' : 'text-red-500'}`} />}
-                                    {row.matchStatus === 'member_pending' && <UserPlus className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                                    {row.matchStatus === 'member_pending' && <UserPlus className={`w-4 h-4 flex-shrink-0 ${row.candidates[0]?.role === 'guest' ? 'text-indigo-500' : 'text-blue-500'}`} />}
                                     {row.matchStatus === 'history_guest' && <UserPlus className="w-4 h-4 text-indigo-500 flex-shrink-0" />}
                                     {row.matchStatus === 'new_guest' && <UserPlus className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
                                     {row.matchStatus === 'error' && <X className="w-4 h-4 text-red-500 flex-shrink-0" />}
@@ -1943,6 +1949,9 @@ const TeamManagement = () => {
                                       {row.name || `(${row.excelRowNumber}행)`}
                                     </span>
                                     {row.isLeaderFlag && <Badge variant="primary" className="text-xs flex-shrink-0">조장</Badge>}
+                                    {row.matchStatus === 'matched' && row.candidates[0]?.isGuest && (
+                                      <Badge variant="info" className="text-xs flex-shrink-0">게스트</Badge>
+                                    )}
                                     {(row.matchStatus === 'ambiguous' || row.matchStatus === 'history_guest_ambiguous') && (
                                       <Badge variant="warning" className="text-xs flex-shrink-0">자동 선택됨</Badge>
                                     )}
@@ -1950,6 +1959,9 @@ const TeamManagement = () => {
                                       <Badge variant={resolvedId ? 'success' : 'danger'} className="text-xs flex-shrink-0">
                                         {resolvedId ? '선택됨' : '선택 필요'}
                                       </Badge>
+                                    )}
+                                    {row.matchStatus === 'member_pending' && row.candidates[0]?.role === 'guest' && (
+                                      <Badge variant="info" className="text-xs flex-shrink-0">게스트 회원</Badge>
                                     )}
                                     {row.matchStatus === 'new_guest' && (
                                       <Badge variant="success" className="text-xs flex-shrink-0">신규 게스트 자동등록</Badge>
@@ -1966,8 +1978,8 @@ const TeamManagement = () => {
                                       </span>
                                     )}
                                     {row.matchStatus === 'member_pending' && (
-                                      <span className="text-xs text-blue-600">
-                                        회원 · {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || ''} (자동 신청됨)
+                                      <span className={`text-xs ${row.candidates[0]?.role === 'guest' ? 'text-indigo-600' : 'text-blue-600'}`}>
+                                        {row.candidates[0]?.role === 'guest' ? '게스트 회원' : '회원'} · {[row.candidates[0].company, row.candidates[0].position].filter(Boolean).join(' / ') || ''} (자동 신청됨)
                                       </span>
                                     )}
                                     {row.matchStatus === 'history_guest' && (
@@ -1997,6 +2009,7 @@ const TeamManagement = () => {
                                         {row.candidates.map((c: any) => (
                                           <option key={c.id} value={c.id}>
                                             {[c.company, c.position].filter(Boolean).join(' / ') || c.id}
+                                            {c.role === 'guest' ? ' (게스트 회원)' : ''}
                                           </option>
                                         ))}
                                       </select>
