@@ -54,6 +54,11 @@ const ProfilePhotoEdit = () => {
       image.src = url;
     });
 
+  // 프로필 아바타에 필요한 최대 해상도. 요즘 스마트폰 고화소 사진을 원본 그대로 크롭하면
+  // JPEG 품질을 낮춰도 Storage 업로드 용량 제한(10MB, storage.rules)을 넘어 업로드가
+  // 실패할 수 있어, 압축 전에 먼저 이 크기로 다운스케일한다.
+  const MAX_OUTPUT_SIZE = 1024;
+
   const getCroppedImg = async (
     imageSrc: string,
     pixelCrop: Area
@@ -66,8 +71,12 @@ const ProfilePhotoEdit = () => {
       throw new Error('Canvas context not available');
     }
 
-    canvas.width = pixelCrop.width;
-    canvas.height = pixelCrop.height;
+    const scale = Math.min(1, MAX_OUTPUT_SIZE / Math.max(pixelCrop.width, pixelCrop.height));
+    const outputWidth = Math.round(pixelCrop.width * scale);
+    const outputHeight = Math.round(pixelCrop.height * scale);
+
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
 
     ctx.drawImage(
       image,
@@ -77,8 +86,8 @@ const ProfilePhotoEdit = () => {
       pixelCrop.height,
       0,
       0,
-      pixelCrop.width,
-      pixelCrop.height
+      outputWidth,
+      outputHeight
     );
 
     // 5MB 이하로 압축
