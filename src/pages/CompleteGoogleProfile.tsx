@@ -55,6 +55,7 @@ const CompleteGoogleProfile = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showReferrerSuggestions, setShowReferrerSuggestions] = useState(false);
+  const [noReferrer, setNoReferrer] = useState(false);
 
   // 추천인 검색 결과 (승인된 회원만, 최대 8명)
   const referrerSuggestions = useMemo(() => {
@@ -127,9 +128,16 @@ const CompleteGoogleProfile = () => {
       newErrors.phoneNumber = '올바른 전화번호 형식이 아닙니다. (예: 010-1234-5678)';
     }
 
-    // 출생연도 유효성 검사 (입력한 경우에만)
-    if (formData.birthYear.trim() && !/^\d{4}$/.test(formData.birthYear)) {
+    // 출생연도 필수
+    if (!formData.birthYear.trim()) {
+      newErrors.birthYear = '출생연도를 입력해주세요.';
+    } else if (!/^\d{4}$/.test(formData.birthYear)) {
       newErrors.birthYear = '올바른 연도를 입력해주세요. (예: 1990)';
+    }
+
+    // 추천인 필수 (단, "추천인이 없습니다" 선택 시 예외)
+    if (!noReferrer && !formData.referredBy.trim()) {
+      newErrors.referredBy = '추천인을 입력하거나 "추천인이 없습니다"를 선택해주세요.';
     }
 
     // 소속(회사명)은 회원가입/게스트 신청 공통 필수
@@ -817,7 +825,7 @@ const CompleteGoogleProfile = () => {
 
                   <div>
                     <label className="block text-white font-semibold mb-2 text-sm">
-                      출생연도
+                      출생연도 <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -926,7 +934,7 @@ const CompleteGoogleProfile = () => {
 
                 <div className="relative">
                   <label className="block text-white font-semibold mb-2 text-sm">
-                    추천인 (선택)
+                    추천인 {!noReferrer && <span className="text-red-400">*</span>}
                   </label>
                   <input
                     type="text"
@@ -934,14 +942,39 @@ const CompleteGoogleProfile = () => {
                     value={formData.referredBy}
                     onChange={handleChange}
                     onFocus={() => setShowReferrerSuggestions(true)}
-                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                    disabled={noReferrer}
+                    className={`w-full px-4 py-3 bg-slate-800 border ${
+                      errors.referredBy ? 'border-red-500' : 'border-slate-700'
+                    } rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
                     placeholder="추천해주신 회원의 이름을 입력해주세요"
                     autoComplete="off"
                   />
-                  <p className="mt-2 text-xs text-amber-400 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                    추천인이 있으신 경우 반드시 입력해주세요.
-                  </p>
+                  {errors.referredBy && (
+                    <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {errors.referredBy}
+                    </p>
+                  )}
+
+                  <label className="mt-3 flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={noReferrer}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setNoReferrer(checked);
+                        if (checked) {
+                          setFormData(prev => ({ ...prev, referredBy: '' }));
+                          setShowReferrerSuggestions(false);
+                          if (errors.referredBy) {
+                            setErrors(prev => ({ ...prev, referredBy: '' }));
+                          }
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
+                    />
+                    추천인이 없습니다
+                  </label>
 
                   {showReferrerSuggestions && referrerSuggestions.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl shadow-lg max-h-64 overflow-y-auto">
