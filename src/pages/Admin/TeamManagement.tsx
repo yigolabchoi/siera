@@ -111,7 +111,7 @@ const TeamManagement = () => {
           eventParticipations.map(p => [p.id, p])
         );
 
-        // 회사/직책 보강 헬퍼: members DB 우선, 없으면 participation fallback (게스트는 participation에만 있음)
+        // 회사/직책/성별/출생연도 보강 헬퍼: members DB 우선, 없으면 participation fallback (게스트는 participation에만 있음)
         const enrichCompanyPosition = (participationId: string, fallbackCompany = '', fallbackPosition = '') => {
           const userId = participationUserMap.get(participationId);
           const memberData = userId ? members.find(m => m.id === userId) : null;
@@ -119,6 +119,8 @@ const TeamManagement = () => {
           return {
             company: memberData?.company || (p as any)?.userCompany || fallbackCompany,
             position: memberData?.position || (p as any)?.userPosition || fallbackPosition,
+            gender: memberData?.gender || '',
+            birthYear: memberData?.birthYear || '',
           };
         };
 
@@ -139,6 +141,8 @@ const TeamManagement = () => {
           let leaderCompany = team.leaderCompany || '';
           let leaderPosition = team.leaderPosition || '';
           let leaderOccupation = team.leaderOccupation || '';
+          let leaderGender = team.leaderGender || '';
+          let leaderBirthYear = team.leaderBirthYear || '';
 
           if (!shouldRemoveLeader && team.leaderId) {
             const enriched = enrichCompanyPosition(team.leaderId, leaderCompany, leaderPosition);
@@ -148,6 +152,8 @@ const TeamManagement = () => {
             leaderCompany = enriched.company;
             leaderPosition = enriched.position;
             leaderOccupation = [enriched.company, enriched.position].filter(Boolean).join(' ');
+            leaderGender = enriched.gender;
+            leaderBirthYear = enriched.birthYear;
           }
 
           return {
@@ -157,6 +163,8 @@ const TeamManagement = () => {
             leaderOccupation: shouldRemoveLeader ? '' : leaderOccupation,
             leaderCompany: shouldRemoveLeader ? '' : leaderCompany,
             leaderPosition: shouldRemoveLeader ? '' : leaderPosition,
+            leaderGender: shouldRemoveLeader ? '' : leaderGender,
+            leaderBirthYear: shouldRemoveLeader ? '' : leaderBirthYear,
             // 환불되었거나 신청 취소된 조원 제거 + 정보 보강
             members: team.members?.filter(member => {
               // participationId 기반 결제 조회 + userId 직접 조회(participationId 없는 레거시 결제 대응)
@@ -178,6 +186,8 @@ const TeamManagement = () => {
                 position: enriched.position,
                 occupation: [enriched.company, enriched.position].filter(Boolean).join(' '),
                 phoneNumber: memberData?.phoneNumber || member.phoneNumber,
+                gender: enriched.gender || member.gender || '',
+                birthYear: enriched.birthYear || member.birthYear || '',
               };
             }) || []
           };
@@ -314,6 +324,8 @@ const TeamManagement = () => {
         occupation: company && position ? `${company} ${position}` : company || position || '',
         phone: member?.phoneNumber || p.userPhone || '',
         phoneNumber: member?.phoneNumber || p.userPhone || '',
+        gender: member?.gender || '',
+        birthYear: member?.birthYear || '',
         isGuest: p.isGuest,
         status: p.status,
         course: p.course,
@@ -332,6 +344,13 @@ const TeamManagement = () => {
       case 'cancelled': return 0;
       default: return -1;
     }
+  };
+
+  // 조편성 화면에 표시할 성별/출생연도 요약 텍스트 (게스트도 회원과 동일하게 표시)
+  const formatGenderBirth = (gender?: string, birthYear?: string): string => {
+    const genderLabel = gender === 'male' ? '남' : gender === 'female' ? '여' : '';
+    const birthLabel = birthYear ? `${birthYear}년생` : '';
+    return [genderLabel, birthLabel].filter(Boolean).join(' · ');
   };
 
   // 이미 다른 조에 배정된 회원 제외
@@ -432,7 +451,7 @@ const TeamManagement = () => {
 
       // 이 산행 신청자도, 클럽 회원도 아닌 이름을 위한 과거 참가 이력 조회
       // (다른 산행에 참가한 적 있는 동일 이름의 userId를 찾아 재사용 — 인적사항도 함께 재사용)
-      const historicalByName = new Map<string, { id: string; userId: string; name: string; company: string; position: string; phone: string; email: string }[]>();
+      const historicalByName = new Map<string, { id: string; userId: string; name: string; company: string; position: string; phone: string; email: string; gender: string; birthYear: string }[]>();
       {
         const latestByUserId = new Map<string, any>();
         participations.forEach(p => {
@@ -451,15 +470,22 @@ const TeamManagement = () => {
           grouped.get(nm)!.set(uid, p);
         });
         grouped.forEach((uidMap, nm) => {
-          historicalByName.set(nm, [...uidMap.entries()].map(([uid, p]) => ({
-            id: uid,
-            userId: uid,
-            name: p.userName,
-            company: p.userCompany || '',
-            position: p.userPosition || '',
-            phone: p.userPhone || '',
-            email: p.userEmail || '',
-          })));
+          historicalByName.set(nm, [...uidMap.entries()].map(([uid, p]) => {
+            // 과거 이력엔 gender/birthYear가 없으므로(Participation엔 없는 필드),
+            // 그 사이 본인이 가입해서 회원명부에 채워둔 값이 있으면 우선 사용
+            const m = members.find(mm => mm.id === uid);
+            return {
+              id: uid,
+              userId: uid,
+              name: p.userName,
+              company: m?.company || p.userCompany || '',
+              position: m?.position || p.userPosition || '',
+              phone: m?.phoneNumber || p.userPhone || '',
+              email: p.userEmail || '',
+              gender: m?.gender || '',
+              birthYear: m?.birthYear || '',
+            };
+          }));
         });
       }
 
@@ -673,21 +699,44 @@ const TeamManagement = () => {
       const newParticipationIdByKey = new Map<string, string>();
       let paymentCreationFailedCount = 0;
 
+      // 방금 이 함수 실행 중에 새로 등록한 사람 (participationId → TeamMember 형태).
+      // addParticipation()이 호출하는 setParticipations()는 리액트 상태 업데이트라 이 함수가
+      // 끝나기 전까진 getApplicantsForEvent()가 참조하는 participations 배열에 반영되지 않는다.
+      // 그 결과 방금 등록한 사람을 곧바로 findApplicant()로 찾으려 하면 못 찾아서 조편성에서
+      // 누락되는 문제가 있었다 — 그래서 등록한 사람 정보를 여기 별도로 기록해두고 우선 사용한다.
+      const justRegistered = new Map<string, TeamMember>();
+
       const autoRegister = async (payload: {
         userId: string; userName: string; userEmail: string; userPhone: string;
         userCompany: string; userPosition: string; isGuest: boolean;
+        gender?: string; birthYear?: string;
       }) => {
+        const { gender, birthYear, ...participationPayload } = payload;
         const participation = await addParticipation({
           eventId: selectedEventIdForTeam,
-          ...payload,
+          ...participationPayload,
           status: 'pending',
           paymentStatus: 'pending',
         });
+        justRegistered.set(participation.id, {
+          id: participation.id,
+          name: payload.userName,
+          company: payload.userCompany,
+          position: payload.userPosition,
+          occupation: [payload.userCompany, payload.userPosition].filter(Boolean).join(' '),
+          phone: payload.userPhone,
+          phoneNumber: payload.userPhone,
+          gender: gender || '',
+          birthYear: birthYear || '',
+          isGuest: payload.isGuest,
+          status: 'pending',
+          paymentStatus: 'pending',
+        } as TeamMember);
         try {
           await createPaymentForParticipation({
             id: participation.id,
             eventId: selectedEventIdForTeam,
-            ...payload,
+            ...participationPayload,
           }, selectedEvent?.paymentInfo?.cost || selectedEvent?.cost);
         } catch (paymentErr) {
           paymentCreationFailedCount++;
@@ -711,6 +760,8 @@ const TeamManagement = () => {
           userPhone: member.phoneNumber || '',
           userCompany: member.company || '',
           userPosition: member.position || '',
+          gender: member.gender,
+          birthYear: member.birthYear,
           // 회원명부엔 role='guest'로 등록된 과거 게스트도 포함될 수 있으므로 role 기준으로 판단
           // (정회원인데 isGuest:false로 고정하면 회원명부에 게스트로 백필된 사람이 정회원으로 잘못 등록됨)
           isGuest: member.role === 'guest',
@@ -734,6 +785,8 @@ const TeamManagement = () => {
           userPhone: candidate.phone || '',
           userCompany: candidate.company || '',
           userPosition: candidate.position || '',
+          gender: candidate.gender,
+          birthYear: candidate.birthYear,
           isGuest: true,
         });
         newParticipationIdByKey.set(userId, pid);
@@ -759,9 +812,10 @@ const TeamManagement = () => {
         newParticipationIdByKey.set(key, pid);
       }
 
-      // 자동등록 이후 최신 신청자 목록 재조회 (방금 등록된 사람 포함)
+      // 자동등록 이후 최신 신청자 목록 재조회 — 다만 방금 이 함수 안에서 등록한 사람은 아직
+      // 리액트 상태(participations)에 반영되지 않았을 수 있으므로 justRegistered를 먼저 확인한다.
       const applicants = getApplicantsForEvent(selectedEventIdForTeam);
-      const findApplicant = (id: string) => applicants.find(a => a.id === id);
+      const findApplicant = (id: string) => justRegistered.get(id) || applicants.find(a => a.id === id);
 
       // 각 행의 최종 participationId 계산 (member/history/new_guest 출처는 방금 생성했거나 이미 있던 participationId로 치환)
       const resolveFinalId = (row: any): string | null => {
@@ -811,47 +865,60 @@ const TeamManagement = () => {
       });
 
       // 2. 엑셀에 등장하는 조번호별로 팀을 찾거나 새로 생성 후 leader/members 설정
-      excelTeamGroups.forEach((group, teamNumber) => {
-        let team = updatedTeams.find(t => ((t as any).number ?? parseInt(t.name) ?? 0) === teamNumber);
-        if (!team) {
-          // @ts-ignore
-          team = {
-            id: `${selectedEventIdForTeam}-team-${Date.now()}-${teamNumber}`,
-            name: `${teamNumber}조`,
-            number: teamNumber,
-            eventId: selectedEventIdForTeam,
-            eventTitle: events.find(e => e.id === selectedEventIdForTeam)?.title || '',
-            leaderId: '',
-            leaderName: '',
-            leaderOccupation: '',
-            members: [],
-          };
-          updatedTeams.push(team);
-        }
+      // — 한 조 처리 중 예외가 나도 나머지 조 처리가 중단되지 않도록 조별로 try/catch
+      const teamBuildErrors: string[] = [];
+      for (const [teamNumber, group] of excelTeamGroups) {
+        try {
+          let team = updatedTeams.find(t => ((t as any).number ?? parseInt(t.name) ?? 0) === teamNumber);
+          if (!team) {
+            // @ts-ignore
+            team = {
+              id: `${selectedEventIdForTeam}-team-${Date.now()}-${teamNumber}`,
+              name: `${teamNumber}조`,
+              number: teamNumber,
+              eventId: selectedEventIdForTeam,
+              eventTitle: events.find(e => e.id === selectedEventIdForTeam)?.title || '',
+              leaderId: '',
+              leaderName: '',
+              leaderOccupation: '',
+              members: [],
+            };
+            updatedTeams.push(team);
+          }
 
-        const leaderRow = group.leaderRows[0];
-        const leaderId = resolveFinalId(leaderRow);
-        const leaderApplicant = leaderId ? findApplicant(leaderId) : null;
-        if (leaderApplicant) {
-          team.leaderId = leaderApplicant.id;
-          team.leaderName = leaderApplicant.name;
-          team.leaderCompany = leaderApplicant.company;
-          team.leaderPosition = leaderApplicant.position;
-          team.leaderOccupation = [leaderApplicant.company, leaderApplicant.position].filter(Boolean).join(' ');
-          team.leaderIsGuest = leaderApplicant.isGuest || false;
-        }
+          const leaderRow = group.leaderRows[0];
+          const leaderId = leaderRow ? resolveFinalId(leaderRow) : null;
+          const leaderApplicant = leaderId ? findApplicant(leaderId) : null;
+          if (leaderApplicant) {
+            team.leaderId = leaderApplicant.id;
+            team.leaderName = leaderApplicant.name;
+            team.leaderCompany = leaderApplicant.company;
+            team.leaderPosition = leaderApplicant.position;
+            team.leaderOccupation = [leaderApplicant.company, leaderApplicant.position].filter(Boolean).join(' ');
+            team.leaderGender = leaderApplicant.gender;
+            team.leaderBirthYear = leaderApplicant.birthYear;
+            team.leaderIsGuest = leaderApplicant.isGuest || false;
+          } else if (leaderRow) {
+            teamBuildErrors.push(`${teamNumber}조: 조장(${leaderRow.name})을 찾지 못해 조장 없이 저장됨`);
+          }
 
-        team.members = group.memberRows
-          .map(r => {
-            const id = resolveFinalId(r);
-            const applicant = id ? findApplicant(id) : null;
-            if (!applicant) return null;
-            // 수동으로 조원을 추가할 때(handleAddMember)와 동일하게 신청자 전체 정보를 저장
-            // (phoneNumber/status/paymentStatus/course 등 화면에서 참조할 수 있는 필드 누락 방지)
-            return { ...applicant } as TeamMember;
-          })
-          .filter((m): m is TeamMember => m !== null);
-      });
+          team.members = group.memberRows
+            .map(r => {
+              const id = resolveFinalId(r);
+              const applicant = id ? findApplicant(id) : null;
+              if (!applicant) {
+                teamBuildErrors.push(`${teamNumber}조: 조원(${r.name})을 찾지 못해 누락됨`);
+                return null;
+              }
+              // 수동으로 조원을 추가할 때(handleAddMember)와 동일하게 신청자 전체 정보를 저장
+              // (phoneNumber/status/paymentStatus/course 등 화면에서 참조할 수 있는 필드 누락 방지)
+              return { ...applicant } as TeamMember;
+            })
+            .filter((m): m is TeamMember => m !== null);
+        } catch (teamErr: any) {
+          teamBuildErrors.push(`${teamNumber}조 처리 중 오류: ${teamErr?.message || teamErr}`);
+        }
+      }
 
       setTeams(updatedTeams);
       await syncTeamsToContext(updatedTeams);
@@ -859,7 +926,8 @@ const TeamManagement = () => {
       alert(
         `엑셀 업로드로 ${excelTeamGroups.size}개 조, ${excelRows.length}명이 배정되었습니다.` +
         (totalAutoRegistered > 0 ? `\n(${totalAutoRegistered}명 자동 산행 신청 처리됨)` : '') +
-        (paymentCreationFailedCount > 0 ? `\n\n⚠️ ${paymentCreationFailedCount}명의 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.` : '')
+        (paymentCreationFailedCount > 0 ? `\n\n⚠️ ${paymentCreationFailedCount}명의 결제 레코드 생성에 실패했습니다. 결제관리 페이지에서 확인해주세요.` : '') +
+        (teamBuildErrors.length > 0 ? `\n\n⚠️ 일부 배정 실패:\n${teamBuildErrors.join('\n')}` : '')
       );
       closeExcelUploadModal();
     } catch (err: any) {
@@ -943,6 +1011,8 @@ const TeamManagement = () => {
         leaderCompany,
         leaderPosition,
         leaderOccupation: [leaderCompany, leaderPosition].filter(Boolean).join(' '),
+        leaderGender: leaderMember?.gender || team.leaderGender || '',
+        leaderBirthYear: leaderMember?.birthYear || team.leaderBirthYear || '',
         leaderIsGuest: leaderParticipation?.isGuest ?? team.leaderIsGuest ?? false,
       };
     }
@@ -1056,6 +1126,8 @@ const TeamManagement = () => {
       leaderCompany: member.company || '',
       leaderPosition: member.position || '',
       leaderOccupation: member.occupation || `${member.company} ${member.position}`,
+      leaderGender: member.gender || '',
+      leaderBirthYear: member.birthYear || '',
       leaderIsGuest: member.isGuest || false,
       members: updatedMembers,
     } as any);
@@ -1420,6 +1492,11 @@ const TeamManagement = () => {
                                       ? team.leaderPosition
                                       : team.leaderOccupation || '소속/직책 미등록'}
                                   </p>
+                                  {formatGenderBirth(team.leaderGender, team.leaderBirthYear) && (
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                      {formatGenderBirth(team.leaderGender, team.leaderBirthYear)}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -1456,6 +1533,11 @@ const TeamManagement = () => {
                                           ? member.position
                                           : member.occupation || '소속/직책 미등록'}
                                       </p>
+                                      {formatGenderBirth(member.gender, member.birthYear) && (
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                          {formatGenderBirth(member.gender, member.birthYear)}
+                                        </p>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
@@ -1618,10 +1700,11 @@ const TeamManagement = () => {
                     const isSelected = isLeader || isMember;
                     const isChecked = selectedMembersForAdd.includes(member.id);
                     
-                    // 회사 및 직책 정보 구성
+                    // 회사 및 직책 정보 구성 (게스트의 경우 성별/출생연도도 참고용으로 함께 표시)
                     const companyInfo = member.company || '회사 미등록';
                     const positionInfo = member.position || member.occupation || '직책 미등록';
-                    const displayInfo = `${companyInfo} · ${positionInfo}`;
+                    const genderBirthInfo = formatGenderBirth(member.gender, member.birthYear);
+                    const displayInfo = [`${companyInfo} · ${positionInfo}`, genderBirthInfo].filter(Boolean).join(' · ');
                     
                     // 결제 상태 레이블
                     const paymentLabel = (() => {

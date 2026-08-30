@@ -210,6 +210,8 @@ export interface TeamMember {
   position?: string; // 직책
   occupation?: string; // Deprecated: Use company instead
   phoneNumber?: string;
+  gender?: string; // 조편성 화면에서 참고용으로 표시 (특히 게스트)
+  birthYear?: string; // 조편성 화면에서 참고용으로 표시 (특히 게스트)
   isGuest?: boolean; // 게스트 여부
   course?: string; // 선택한 코스 (A조, B조, 현장 결정 등)
   status?: ParticipationStatus; // 참가 상태
@@ -228,6 +230,8 @@ export interface Team {
   leaderPosition?: string;
   leaderOccupation?: string; // Deprecated: Use leaderCompany instead
   leaderPhone?: string;
+  leaderGender?: string; // 조편성 화면에서 참고용으로 표시 (특히 게스트)
+  leaderBirthYear?: string; // 조편성 화면에서 참고용으로 표시 (특히 게스트)
   leaderIsGuest?: boolean; // 조장 게스트 여부
   members: TeamMember[];
 }

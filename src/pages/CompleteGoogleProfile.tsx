@@ -220,6 +220,10 @@ const CompleteGoogleProfile = () => {
     email: string;
     company?: string;
     position?: string;
+    gender?: string;
+    birthYear?: string;
+    hikingLevel?: string;
+    referredBy?: string;
   }) => {
     if (!guestEvent || !firebaseUser) return;
 
@@ -242,6 +246,10 @@ const CompleteGoogleProfile = () => {
           phoneNumber: profileData.phoneNumber || '',
           company: profileData.company || '',
           position: profileData.position || '',
+          gender: profileData.gender || '',
+          birthYear: profileData.birthYear || '',
+          hikingLevel: profileData.hikingLevel || '',
+          referredBy: profileData.referredBy || '',
           role: 'guest' as const,
           isApproved: true,
           isActive: true,
@@ -430,6 +438,10 @@ const CompleteGoogleProfile = () => {
               email: firebaseUser.email || '',
               company: formData.company || preRegMember.company || '',
               position: formData.position || preRegMember.position || '',
+              gender: formData.gender,
+              birthYear: formData.birthYear,
+              hikingLevel: formData.hikingLevel,
+              referredBy: formData.referredBy,
             });
             setIsSubmitting(false);
             reloadUserFromFirestore().catch(() => {});
@@ -515,6 +527,10 @@ const CompleteGoogleProfile = () => {
               email: firebaseUser.email || '',
               company: formData.company || existingMember.company || '',
               position: formData.position || existingMember.position || '',
+              gender: formData.gender || existingMember.gender,
+              birthYear: formData.birthYear || existingMember.birthYear,
+              hikingLevel: formData.hikingLevel || existingMember.hikingLevel,
+              referredBy: formData.referredBy || existingMember.referredBy,
             });
             setIsSubmitting(false);
             reloadUserFromFirestore().catch(() => {});
@@ -544,6 +560,10 @@ const CompleteGoogleProfile = () => {
           email: firebaseUser.email || '',
           company: formData.company,
           position: formData.position,
+          gender: formData.gender,
+          birthYear: formData.birthYear,
+          hikingLevel: formData.hikingLevel,
+          referredBy: formData.referredBy,
         });
         setIsSubmitting(false);
         reloadUserFromFirestore().catch(() => {}); // 백그라운드 리로드
