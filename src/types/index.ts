@@ -511,13 +511,17 @@ export interface Poem {
 // ==================== Guest Application Types ====================
 export interface GuestApplication {
   id: string;
-  userId?: string;  // Firebase Auth UID (정회원 전환 시 이력 연동용)
+  userId?: string;  // Firebase Auth UID (정회원 전환 시 이력 연동용). 인증 없이 신청한 경우 members의 synthetic guest_ ID.
   name: string;
   email: string;
   phoneNumber: string;  // ✅ 표준화: phone → phoneNumber
   phone?: string; // Deprecated: Use phoneNumber instead
   company?: string;
   position?: string;
+  gender?: string;
+  birthYear?: string;
+  hikingLevel?: string;
+  applicationMessage?: string;
   eventId: string;
   eventTitle: string;
   eventDate: string;

@@ -20,10 +20,18 @@ import { useLoadingSafetyTimeout } from '../hooks/useLoadingSafetyTimeout';
 /**
  * 게스트 산행 신청 페이지
  *
- * 프로세스 (인증 기반 → 정회원 전환 시 이력 연동):
- *   Step 1 'intro'    → 산행 정보 확인 + Google/SMS 인증
- *   Step 2 (외부)     → /complete-profile 에서 추가 정보 입력 (기존 폼 재활용)
+ * 신청(apply) 프로세스 — 인증 없음:
+ *   Step 1 'intro'    → 산행 정보 확인 후 바로 신청서 작성으로 이동
+ *   Step 2 (외부)     → /complete-profile?guest={eventId} 에서 정보 입력 (인증 없이 진행,
+ *                        CompleteGoogleProfile이 firebaseUser 없이도 동작하도록 되어 있음)
  *   Step 3 'complete' → 신청 완료 + 입금 안내
+ *
+ *   전화번호를 키로 members(role='guest')에 즉시 등록되며, 이후 정회원으로 실제 가입(Google/SMS
+ *   인증)할 때 CompleteGoogleProfile의 전화번호 매칭 로직이 이 기록을 자동으로 새 계정에 연동한다.
+ *
+ * 취소(cancel) 프로세스 — 기존과 동일하게 Google/SMS 재인증 필요:
+ *   신청 시 인증 없이 등록된 게스트는 이 방식으로 취소할 계정이 없으므로, 관리자에게 문의하거나
+ *   관리자 페이지에서 처리해야 한다 (추후 전화번호 기반 취소를 추가할 수 있음).
  *
  * ※ 추가정보 입력 페이지(CompleteGoogleProfile)와 동일한 폼 사용으로 데이터 일관성 보장
  */
@@ -589,7 +597,7 @@ const GuestApplication = () => {
   // ===== 프로세스 인디케이터 =====
   const ProcessIndicator = ({ currentStep }: { currentStep: PageStep }) => {
     const steps = [
-      { key: 'intro', label: '인증' },
+      { key: 'intro', label: '시작' },
       { key: 'form', label: '정보 입력' },
       { key: 'complete', label: '완료' },
     ];
@@ -690,7 +698,7 @@ const GuestApplication = () => {
             <p className="text-slate-500 text-sm">
               {mode === 'cancel'
                 ? '신청 시 사용한 인증 방법으로 로그인하세요'
-                : '간편 인증 후 바로 산행에 참여하세요'
+                : '인증 없이 정보만 입력하면 바로 산행에 참여하세요'
               }
             </p>
           </div>
@@ -733,9 +741,8 @@ const GuestApplication = () => {
                   { num: '2', text: '신청 내역 확인', sub: '참가 신청 정보 확인', current: false },
                   { num: '3', text: '취소 완료', sub: '산행 신청 취소', current: false },
                 ] : [
-                  { num: '1', text: '간편 인증', sub: 'Google 또는 SMS 인증', current: true },
-                  { num: '2', text: '추가 정보 입력', sub: '이름, 연락처 등', current: false },
-                  { num: '3', text: '게스트 산행 신청 완료', sub: '입금 안내 확인', current: false },
+                  { num: '1', text: '정보 입력', sub: '이름, 연락처 등 (인증 불필요)', current: true },
+                  { num: '2', text: '게스트 산행 신청 완료', sub: '입금 안내 확인', current: false },
                 ]).map((item, i) => (
                   <div key={i} className={`flex items-center gap-3 p-3 rounded-xl ${
                     item.current
@@ -799,24 +806,39 @@ const GuestApplication = () => {
               </div>
             )}
 
-            {/* 인증 안내 + 버튼 (신청 모드: 마감 전만, 취소 모드: 항상) */}
-            {currentEvent && (mode === 'cancel' || !applicationClosed) && (
+            {/* 신청 모드: 인증 없이 바로 신청 폼으로 이동 */}
+            {currentEvent && mode === 'apply' && !applicationClosed && (
+              <div className="px-5 sm:px-6 pb-5 sm:pb-6 space-y-3">
+                <div className="p-3 rounded-xl border bg-blue-50 border-blue-100">
+                  <div className="flex items-start gap-2.5">
+                    <Shield className="w-4 h-4 flex-shrink-0 mt-0.5 text-blue-500" />
+                    <p className="text-xs leading-relaxed text-blue-700">
+                      별도 로그인/인증 없이 아래에서 바로 신청서를 작성하실 수 있습니다.<br />
+                      추후 정회원으로 가입하실 때 Google 또는 SMS 인증을 하시면, 오늘 남긴 신청 이력이
+                      전화번호로 자동 연동됩니다.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => navigate(`/complete-profile?guest=${currentEvent.id}`)}
+                  className="w-full px-6 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200"
+                >
+                  <Mountain className="w-5 h-5" />
+                  게스트 산행 신청서 작성하기
+                </button>
+              </div>
+            )}
+
+            {/* 취소 모드: 신청 시 사용한 인증 방법으로 로그인 */}
+            {currentEvent && mode === 'cancel' && (
               <div className="px-5 sm:px-6 pb-5 sm:pb-6 space-y-3">
                 {/* 안내 메시지 */}
-                <div className={`p-3 rounded-xl border ${
-                  mode === 'cancel' ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'
-                }`}>
+                <div className="p-3 rounded-xl border bg-red-50 border-red-100">
                   <div className="flex items-start gap-2.5">
-                    <Shield className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
-                      mode === 'cancel' ? 'text-red-500' : 'text-blue-500'
-                    }`} />
-                    <p className={`text-xs leading-relaxed ${
-                      mode === 'cancel' ? 'text-red-700' : 'text-blue-700'
-                    }`}>
-                      {mode === 'cancel'
-                        ? '게스트 산행 신청 시 사용한 동일한 인증 방법(Google 또는 SMS)으로 로그인해주세요.'
-                        : <>산행 이력 관리를 위해 간편 인증이 필요합니다.<br />추후 정회원 가입 시 게스트 산행 이력이 자동으로 연동됩니다.</>
-                      }
+                    <Shield className="w-4 h-4 flex-shrink-0 mt-0.5 text-red-500" />
+                    <p className="text-xs leading-relaxed text-red-700">
+                      게스트 산행 신청 시 사용한 동일한 인증 방법(Google 또는 SMS)으로 로그인해주세요.
                     </p>
                   </div>
                 </div>
@@ -865,11 +887,7 @@ const GuestApplication = () => {
                 <button
                   onClick={() => { setAuthError(''); setShowSmsModal(true); }}
                   disabled={isGoogleLoggingIn || authLoading}
-                  className={`w-full px-6 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] ${
-                    mode === 'cancel'
-                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-200'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200'
-                  }`}
+                  className="w-full px-6 py-3.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-200"
                 >
                   <Smartphone className="w-5 h-5" />
                   SMS 인증으로 시작

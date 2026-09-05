@@ -41,7 +41,20 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/members/$(refId)) &&
              get(/databases/$(database)/documents/members/$(refId)).data.mergedInto == request.auth.uid;
     }
-    
+
+    // 인증 없이 게스트 산행 신청 시 자기 자신을 role='guest'로 등록하는 것만 허용.
+    // 문서 ID를 'guest_' 접두사로 강제해 실제 Firebase Auth UID(members/{uid})와 절대 겹치지 않게 하고,
+    // role/isApproved/isActive를 고정값으로 강제해 권한 상승(예: role:'chairman' 자칭)을 원천 차단한다.
+    function isValidUnauthGuestCreate(memberId) {
+      let data = request.resource.data;
+      return memberId.matches('guest_.*') &&
+             data.role == 'guest' &&
+             data.isApproved == true &&
+             data.isActive == true &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
+             data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() < 20;
+    }
+
     // ========================================
     // 회원 (members) 컬렉션
     // ========================================
@@ -49,16 +62,18 @@ service cloud.firestore {
       // 읽기: 모든 사용자 (간편 신청 페이지에서 이름 검색용)
       allow read: if true;
       
-      // 생성: 본인 UID 또는 관리자
-      allow create: if (isAuthenticated() && request.auth.uid == memberId) || isAdmin();
+      // 생성: 본인 UID, 관리자, 또는 인증 없는 게스트 산행 신청의 자기 등록(guest_ 접두사, role='guest' 고정)
+      allow create: if (isAuthenticated() && request.auth.uid == memberId) || isAdmin() || isValidUnauthGuestCreate(memberId);
       
-      // 수정: 본인, 관리자, 또는 크로스 프로바이더 계정 병합 (제한된 필드만)
+      // 수정: 본인, 관리자, 크로스 프로바이더 계정 병합(제한된 필드만),
+      //       또는 재신청한 인증 없는 게스트 본인 정보 갱신(기존/신규 모두 role='guest' 고정 유지)
       allow update: if isOwner(memberId) || isAdmin() ||
                        (isAuthenticated() &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['isActive', 'mergedInto', 'mergedAt', 'updatedAt']) &&
                         request.resource.data.isActive == false &&
-                        request.resource.data.mergedInto == request.auth.uid);
+                        request.resource.data.mergedInto == request.auth.uid) ||
+                       (resource.data.role == 'guest' && isValidUnauthGuestCreate(memberId));
       
       allow delete: if isAdmin();
     }
@@ -279,7 +294,11 @@ service cloud.firestore {
                        && request.resource.data.name.size() < 50
                        && request.resource.data.phoneNumber is string
                        && request.resource.data.eventId is string;
-      allow update, delete: if isAdmin();
+      // 정회원 전환 시 인증 없이 남긴 과거 게스트 신청의 userId만 새 계정으로 재연결 허용
+      allow update: if isAdmin() ||
+                       (isAuthenticated() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userId']));
+      allow delete: if isAdmin();
     }
     
     // ========================================

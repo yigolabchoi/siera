@@ -71,6 +71,8 @@ const CompleteGoogleProfile = () => {
   useEffect(() => {
     if (authLoading) return; // Auth 상태 확인 중에는 대기
     if (!firebaseUser) {
+      // 게스트 산행 신청은 인증 없이 폼만 입력하고 진행 — 리다이렉트하지 않음
+      if (guestEventId) return;
       navigate('/');
       return;
     }
@@ -167,6 +169,7 @@ const CompleteGoogleProfile = () => {
       { name: 'attendance', field: 'memberId' },
       { name: 'payments', field: 'memberId' },
       { name: 'hikingHistory', field: 'memberId' },
+      { name: 'guestApplications', field: 'userId' },
     ];
 
     for (const col of collections) {
@@ -214,7 +217,8 @@ const CompleteGoogleProfile = () => {
   };
 
   // ===== 게스트 산행 참여 자동 생성 (프로필 저장 완료 후 호출) =====
-  const createGuestParticipation = async (profileData: {
+  // userId: 인증된 경우 firebaseUser.uid, 인증 없는 게스트 신청인 경우 phone 매칭 또는 새로 발급한 synthetic id
+  const createGuestParticipation = async (userId: string, profileData: {
     name: string;
     phoneNumber: string;
     email: string;
@@ -224,12 +228,13 @@ const CompleteGoogleProfile = () => {
     birthYear?: string;
     hikingLevel?: string;
     referredBy?: string;
+    applicationMessage?: string;
   }) => {
-    if (!guestEvent || !firebaseUser) return;
+    if (!guestEvent) return;
 
     // 중복 체크 (취소된 참가는 제외 — 재신청 허용)
     const eventParticipations = participations.filter(p => p.eventId === guestEvent.id);
-    if (eventParticipations.some(p => p.userId === firebaseUser.uid && p.status !== 'cancelled')) {
+    if (eventParticipations.some(p => p.userId === userId && p.status !== 'cancelled')) {
       console.log('ℹ️ 이미 해당 산행에 신청되어 있음 - 게스트 참여 생성 스킵');
       return;
     }
@@ -237,12 +242,12 @@ const CompleteGoogleProfile = () => {
     // 회원명부(members)에 아직 없으면 관리자 승인 없이 즉시 role='guest'로 등록
     // (preRegisteredMembers/기존 회원 매칭 branch에서는 이미 role='member'로 생성돼 있으므로 건드리지 않음)
     try {
-      const existingMemberResult = await getDocument<any>('members', firebaseUser.uid);
+      const existingMemberResult = await getDocument<any>('members', userId);
       if (!existingMemberResult.success && existingMemberResult.error === 'Document not found') {
-        await setDocument('members', firebaseUser.uid, {
-          id: firebaseUser.uid,
+        await setDocument('members', userId, {
+          id: userId,
           name: profileData.name,
-          email: profileData.email || firebaseUser.email || '',
+          email: profileData.email || firebaseUser?.email || '',
           phoneNumber: profileData.phoneNumber || '',
           company: profileData.company || '',
           position: profileData.position || '',
@@ -254,9 +259,21 @@ const CompleteGoogleProfile = () => {
           isApproved: true,
           isActive: true,
           joinDate: new Date().toISOString().split('T')[0],
-          authProvider: 'google',
+          authProvider: firebaseUser ? 'google' : 'guest-unauth',
         });
-        console.log('👤 게스트를 회원명부에 즉시 등록:', firebaseUser.uid);
+        console.log('👤 게스트를 회원명부에 즉시 등록:', userId);
+      } else if (existingMemberResult.success) {
+        // 이미 있는 회원/게스트(전화번호로 매칭됨) — 최신 정보로 갱신
+        await setDocument('members', userId, {
+          ...existingMemberResult.data,
+          name: profileData.name || existingMemberResult.data.name,
+          company: profileData.company || existingMemberResult.data.company || '',
+          position: profileData.position || existingMemberResult.data.position || '',
+          gender: profileData.gender || existingMemberResult.data.gender || '',
+          birthYear: profileData.birthYear || existingMemberResult.data.birthYear || '',
+          hikingLevel: profileData.hikingLevel || existingMemberResult.data.hikingLevel || '',
+          referredBy: profileData.referredBy || existingMemberResult.data.referredBy || '',
+        });
       }
     } catch (memberErr) {
       console.warn('⚠️ 게스트 회원명부 등록 중 오류 (참가 신청은 계속 진행):', memberErr);
@@ -266,7 +283,7 @@ const CompleteGoogleProfile = () => {
       // 1. 참여 신청 생성
       await addParticipation({
         eventId: guestEvent.id,
-        userId: firebaseUser.uid,
+        userId,
         userName: profileData.name,
         userEmail: profileData.email || '',
         userPhone: profileData.phoneNumber || '',
@@ -281,12 +298,17 @@ const CompleteGoogleProfile = () => {
       // 2. 게스트 신청 기록 (관리자 추적용)
       try {
         await addGuestApplication({
-          userId: firebaseUser.uid,
+          userId,
           name: profileData.name,
-          email: profileData.email || firebaseUser.email || '',
+          email: profileData.email || firebaseUser?.email || '',
           phoneNumber: profileData.phoneNumber || '',
           company: profileData.company || '',
           position: profileData.position || '',
+          gender: profileData.gender || '',
+          birthYear: profileData.birthYear || '',
+          hikingLevel: profileData.hikingLevel || '',
+          referredBy: profileData.referredBy || '',
+          applicationMessage: profileData.applicationMessage || '',
           eventId: guestEvent.id,
           eventTitle: guestEvent.title,
           eventDate: guestEvent.date,
@@ -311,6 +333,55 @@ const CompleteGoogleProfile = () => {
     navigate(`/guest-application?${params.toString()}`, { replace: true });
   };
 
+  // ===== 인증 없는 게스트 산행 신청 처리 =====
+  // Google/SMS 인증 없이 폼만 입력한 게스트를 위한 경로. 전화번호로 기존 회원/게스트를 찾아 재사용하고,
+  // 없으면 'guest_' 접두사 synthetic id를 새로 발급해 members(role='guest')에 즉시 등록한다.
+  // (실제 정회원 가입 시 firestore.rules의 guest_ 접두사 규칙 덕분에, 아래에서 만든 회원명부 문서가
+  //  handleSubmit의 "전화번호로 기존 members 문서 검색" 로직에 그대로 걸려 자동으로 병합/연동된다.)
+  const handleUnauthenticatedGuestSubmit = async () => {
+    if (!guestEvent) {
+      alert('신청 대상 산행 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const normalizedPhone = removePhoneNumberHyphens(formData.phoneNumber);
+      const trimmedName = formData.name.trim();
+
+      // 전화번호로 기존 회원/게스트 매칭 (있으면 재사용해 이력이 끊기지 않게 함)
+      const existingMemberResult = await queryDocuments<any>('members', [
+        { field: 'phoneNumber', operator: '==', value: normalizedPhone },
+      ]);
+      const existingMember = existingMemberResult.success && existingMemberResult.data
+        ? existingMemberResult.data.find((m: any) => m.isActive !== false && !m.mergedInto)
+        : null;
+
+      const resolvedUserId = existingMember?.id
+        || `guest_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+
+      await createGuestParticipation(resolvedUserId, {
+        name: trimmedName,
+        phoneNumber: normalizedPhone,
+        email: '',
+        company: formData.company,
+        position: formData.position,
+        gender: formData.gender,
+        birthYear: formData.birthYear,
+        hikingLevel: formData.hikingLevel,
+        referredBy: formData.referredBy,
+        applicationMessage: formData.applicationMessage,
+      });
+
+      navigateToGuestComplete(trimmedName);
+    } catch (error) {
+      console.error('❌ 게스트 산행 신청 실패:', error);
+      alert('신청 중 오류가 발생했습니다. 다시 시도해주세요.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -321,6 +392,11 @@ const CompleteGoogleProfile = () => {
     }
 
     if (!firebaseUser) {
+      // 게스트 산행 신청은 인증 없이 진행 — 별도 경로로 처리
+      if (guestEventId) {
+        await handleUnauthenticatedGuestSubmit();
+        return;
+      }
       alert('로그인 정보를 찾을 수 없습니다.');
       navigate('/');
       return;
@@ -408,14 +484,11 @@ const CompleteGoogleProfile = () => {
           });
 
           // 기존 members 문서가 있으면 계정 병합 (pre_ 및 크로스 프로바이더 모두 처리)
+          // 주의: mergedInto를 먼저 표시해야 participations/guestApplications 등의
+          // isMergedIntoCurrentUser() 보안 규칙이 통과해 migrateRelatedData가 정상 동작한다.
           if (existingMember && existingMember.id !== firebaseUser.uid) {
-            await migrateRelatedData(existingMember.id, firebaseUser.uid);
-            
-            if (existingMember.id.startsWith('pre_')) {
-              await deleteDocument('members', existingMember.id);
-              console.log(`🗑️ 기존 pre_ 문서 삭제: ${existingMember.id}`);
-            } else {
-              // 크로스 프로바이더: 기존 문서 비활성화
+            if (!existingMember.id.startsWith('pre_')) {
+              // 크로스 프로바이더(guest_ 포함): 기존 문서 비활성화 먼저
               try {
                 await updateDocument('members', existingMember.id, {
                   isActive: false,
@@ -427,12 +500,19 @@ const CompleteGoogleProfile = () => {
                 console.warn('⚠️ 기존 문서 비활성화 실패:', mergeErr);
               }
             }
+
+            await migrateRelatedData(existingMember.id, firebaseUser.uid);
+
+            if (existingMember.id.startsWith('pre_')) {
+              await deleteDocument('members', existingMember.id);
+              console.log(`🗑️ 기존 pre_ 문서 삭제: ${existingMember.id}`);
+            }
           }
 
           console.log('✅ 사전등록 회원 → 정회원 즉시 등록 완료');
 
           if (guestEventId) {
-            await createGuestParticipation({
+            await createGuestParticipation(firebaseUser.uid, {
               name: trimmedName,
               phoneNumber: normalizedPhone,
               email: firebaseUser.email || '',
@@ -502,12 +582,9 @@ const CompleteGoogleProfile = () => {
 
         const newDocResult = await setDocument('members', firebaseUser.uid, updatedMemberData);
         if (newDocResult.success) {
-          await migrateRelatedData(existingMember.id, firebaseUser.uid);
-          
-          if (existingMember.id.startsWith('pre_')) {
-            await deleteDocument('members', existingMember.id);
-            console.log('✅ pre_ → Auth UID 문서 전환 완료');
-          } else {
+          // 주의: mergedInto를 먼저 표시해야 isMergedIntoCurrentUser() 보안 규칙이 통과해
+          // migrateRelatedData가 participations/guestApplications 등을 정상적으로 옮길 수 있다.
+          if (!existingMember.id.startsWith('pre_')) {
             try {
               await updateDocument('members', existingMember.id, {
                 isActive: false,
@@ -520,8 +597,15 @@ const CompleteGoogleProfile = () => {
             }
           }
 
+          await migrateRelatedData(existingMember.id, firebaseUser.uid);
+
+          if (existingMember.id.startsWith('pre_')) {
+            await deleteDocument('members', existingMember.id);
+            console.log('✅ pre_ → Auth UID 문서 전환 완료');
+          }
+
           if (guestEventId) {
-            await createGuestParticipation({
+            await createGuestParticipation(firebaseUser.uid, {
               name: trimmedName,
               phoneNumber: normalizedPhone,
               email: firebaseUser.email || '',
@@ -554,7 +638,7 @@ const CompleteGoogleProfile = () => {
       // 게스트 산행 신청 흐름인 경우 → pendingUsers(가입 승인 대기)를 거치지 않고
       // createGuestParticipation이 즉시 회원명부에 role='guest'로 등록한 뒤 참여 생성
       if (guestEventId) {
-        await createGuestParticipation({
+        await createGuestParticipation(firebaseUser.uid, {
           name: trimmedName,
           phoneNumber: normalizedPhone,
           email: firebaseUser.email || '',
@@ -627,7 +711,8 @@ const CompleteGoogleProfile = () => {
   };
 
   // Auth 로딩 중이거나 firebaseUser가 아직 없는 경우 로딩 표시
-  if (authLoading || !firebaseUser) {
+  // (단, 게스트 산행 신청은 인증 없이 폼을 그대로 보여줘야 하므로 예외)
+  if (authLoading || (!firebaseUser && !guestEventId)) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
@@ -739,28 +824,38 @@ const CompleteGoogleProfile = () => {
           </div>
         )}
 
-        {/* Google Account Info */}
-        <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-blue-500/20 rounded-lg">
-              <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
-                <path d="M17.64 9.20454C17.64 8.56636 17.5827 7.95272 17.4764 7.36363H9V10.845H13.8436C13.635 11.97 13.0009 12.9231 12.0477 13.5613V15.8195H14.9564C16.6582 14.2527 17.64 11.9454 17.64 9.20454Z" fill="#4285F4"/>
-                <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5613C11.2418 14.1013 10.2109 14.4204 9 14.4204C6.65591 14.4204 4.67182 12.8372 3.96409 10.71H0.957275V13.0418C2.43818 15.9831 5.48182 18 9 18Z" fill="#34A853"/>
-                <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54772 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
-                <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
-              </svg>
-            </div>
-            <div className="text-sm flex-1">
-              <p className="font-semibold mb-1 text-white">Google 계정으로 로그인됨</p>
-              <p className="text-slate-300">{firebaseUser.email}</p>
-              <p className="text-slate-400 text-xs mt-1">
-                {guestEventId
-                  ? '* 아래 정보를 입력하면 게스트 산행 신청이 완료됩니다'
-                  : '* 회원 가입을 완료하려면 아래 정보를 입력해주세요'}
-              </p>
+        {/* Google Account Info (인증된 경우만 표시 — 인증 없는 게스트 신청은 계정이 없음) */}
+        {firebaseUser ? (
+          <div className="mb-8 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-500/20 rounded-lg">
+                <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
+                  <path d="M17.64 9.20454C17.64 8.56636 17.5827 7.95272 17.4764 7.36363H9V10.845H13.8436C13.635 11.97 13.0009 12.9231 12.0477 13.5613V15.8195H14.9564C16.6582 14.2527 17.64 11.9454 17.64 9.20454Z" fill="#4285F4"/>
+                  <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5613C11.2418 14.1013 10.2109 14.4204 9 14.4204C6.65591 14.4204 4.67182 12.8372 3.96409 10.71H0.957275V13.0418C2.43818 15.9831 5.48182 18 9 18Z" fill="#34A853"/>
+                  <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54772 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+                  <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+                </svg>
+              </div>
+              <div className="text-sm flex-1">
+                <p className="font-semibold mb-1 text-white">Google 계정으로 로그인됨</p>
+                <p className="text-slate-300">{firebaseUser.email}</p>
+                <p className="text-slate-400 text-xs mt-1">
+                  {guestEventId
+                    ? '* 아래 정보를 입력하면 게스트 산행 신청이 완료됩니다'
+                    : '* 회원 가입을 완료하려면 아래 정보를 입력해주세요'}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : guestEventId ? (
+          <div className="mb-8 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+            <p className="text-sm text-emerald-300">
+              별도 로그인/인증 없이 아래 정보만 입력하면 게스트 산행 신청이 완료됩니다.
+              나중에 정회원으로 가입하실 때 Google 또는 SMS 인증을 진행하시면, 오늘 남긴
+              신청 이력이 전화번호로 자동 연동됩니다.
+            </p>
+          </div>
+        ) : null}
 
         {/* Form Card */}
         <div className="bg-slate-900/80 backdrop-blur-sm rounded-3xl p-8 md:p-12 border border-slate-800 shadow-2xl">
@@ -792,7 +887,9 @@ const CompleteGoogleProfile = () => {
                     </p>
                   )}
                   <p className="mt-2 text-xs text-slate-400">
-                    * Google 계정 이름과 다를 수 있습니다. 실명을 입력해주세요.
+                    {firebaseUser
+                      ? '* Google 계정 이름과 다를 수 있습니다. 실명을 입력해주세요.'
+                      : '* 실명을 입력해주세요.'}
                   </p>
                 </div>
 
