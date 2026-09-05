@@ -847,14 +847,6 @@ const CompleteGoogleProfile = () => {
               </div>
             </div>
           </div>
-        ) : guestEventId ? (
-          <div className="mb-8 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
-            <p className="text-sm text-emerald-300">
-              별도 로그인/인증 없이 아래 정보만 입력하면 게스트 산행 신청이 완료됩니다.
-              나중에 정회원으로 가입하실 때 Google 또는 SMS 인증을 진행하시면, 오늘 남긴
-              신청 이력이 전화번호로 자동 연동됩니다.
-            </p>
-          </div>
         ) : null}
 
         {/* Form Card */}
