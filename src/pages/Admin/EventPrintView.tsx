@@ -695,7 +695,7 @@ const EventPrintView = () => {
 
         /* 페이지 기본 */
         .page {
-          font-family: 'Malgun Gothic', sans-serif;
+          font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
           color: #1a1a1a;
           line-height: 1.6;
           position: relative;
@@ -1133,22 +1133,21 @@ const EventPrintView = () => {
           font-size: 9px;
         }
 
-        .teams-grid-3col .team-header {
-          margin: -12px -12px 10px -12px;
-          padding: 8px 12px 8px 12px;
-        }
-
         .team-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          flex-wrap: nowrap;
           gap: 6px;
-          margin-bottom: 7px;
-          padding-bottom: 6px;
           border-bottom: 1.5px solid #333;
           background: #f4f4f4;
           margin: -10px -10px 8px -10px;
           padding: 7px 10px 7px 10px;
+        }
+
+        .teams-grid-3col .team-header {
+          margin: -12px -12px 10px -12px;
+          padding: 8px 12px 8px 12px;
         }
 
         .team-num {
@@ -1168,13 +1167,18 @@ const EventPrintView = () => {
           display: flex;
           align-items: center;
           justify-content: flex-end;
+          flex-wrap: nowrap;
           gap: 4px;
         }
 
         .leader-header-name {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
           font-weight: 800;
           font-size: 13px;
           color: #1a1a1a;
+          white-space: nowrap;
         }
 
         .leader-header-detail {
@@ -1192,8 +1196,8 @@ const EventPrintView = () => {
           background: #1a1a1a;
           border-radius: 2px;
           padding: 1px 4px;
-          vertical-align: middle;
           line-height: 1.5;
+          white-space: nowrap;
           flex-shrink: 0;
         }
 
@@ -1207,6 +1211,7 @@ const EventPrintView = () => {
         .member-item-inline {
           display: flex;
           align-items: baseline;
+          flex-wrap: nowrap;
           gap: 4px;
           font-size: 11px;
           line-height: 1.6;
@@ -1214,15 +1219,18 @@ const EventPrintView = () => {
         }
 
         .member-name {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
           font-weight: 700;
           color: #1a1a1a;
           font-size: 13px;
+          white-space: nowrap;
           flex-shrink: 0;
         }
 
         .guest-badge {
           display: inline-block;
-          margin-left: 3px;
           font-size: 8px;
           font-weight: 700;
           color: #b45309;
@@ -1230,8 +1238,9 @@ const EventPrintView = () => {
           border: 0.5px solid #d97706;
           border-radius: 2px;
           padding: 0 3px;
-          vertical-align: middle;
           line-height: 1.5;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .member-info {
